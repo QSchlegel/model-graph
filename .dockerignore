@@ -1,0 +1,15 @@
+.git
+.venv
+.claude
+.obsidian
+models
+runs
+traces
+docs
+*.ndjson
+__pycache__
+*.pyc
+harness.py
+replay.py
+make_mock.py
+export_observable.py

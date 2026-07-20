@@ -1,0 +1,12 @@
+{
+  "name": "smoke",
+  "prompts": [
+    {"prompt": "Why is the sky blue? One sentence.",
+     "expect": {"contains": ["scatter"], "eos": true, "max_tokens": 60}},
+    {"prompt": "What is 2+2? Answer with just the number.",
+     "expect": {"contains": ["4"], "eos": true, "max_tokens": 20}},
+    {"prompt": "Name the capital of France in one short sentence.",
+     "expect": {"contains": ["Paris"], "eos": true, "max_tokens": 40,
+                "max_settle_mean": 14}}
+  ]
+}

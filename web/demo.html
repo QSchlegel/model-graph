@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gemma-graph · demo</title>
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat0:#D8DEE6; --heat1:#E39B2D; --heat2:#B02E3C;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font:13px/1.45 var(--mono);
+       display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;gap:12px;align-items:center;padding:8px 14px;flex-wrap:wrap;
+         border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:14px;font-weight:600;letter-spacing:.04em}
+  #model{color:var(--muted);font-size:12px}
+  .ctl{margin-left:auto;display:flex;gap:8px;align-items:center}
+  button{font:12px var(--mono);color:var(--ink);background:var(--panel);
+         border:1px solid var(--ink);border-radius:3px;padding:3px 10px;cursor:pointer}
+  button:hover{background:var(--ink);color:var(--panel)}
+  button.active{background:var(--ink);color:var(--panel)}
+  button:focus-visible{outline:2px solid var(--heat1);outline-offset:1px}
+  main{flex:1;display:flex;min-height:0;position:relative}
+  #graphwrap{flex:1;overflow:auto;padding:10px 6px;-webkit-overflow-scrolling:touch}
+  svg{display:block;margin:0 auto;width:100%;max-width:520px;height:auto;
+      touch-action:pan-y pinch-zoom}
+  #side{width:250px;border-left:1px solid var(--line);background:var(--panel);
+        padding:12px;overflow:auto}
+  #side-close{display:none;position:absolute;top:8px;right:10px;padding:2px 8px}
+  #side h2{font-size:11px;font-weight:600;text-transform:uppercase;
+           letter-spacing:.08em;color:var(--muted);margin:10px 0 6px}
+  #side .big{font-size:21px;font-weight:600;margin:2px 0 6px}
+  #side .row{display:flex;justify-content:space-between;padding:3px 0;
+             border-bottom:1px dashed var(--line);font-size:12px}
+  #side .row span:last-child{font-weight:600}
+  .bar{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .bar label{width:30px;color:var(--muted);font-size:11px;text-align:right}
+  .bar .track{flex:1;height:9px;background:var(--heat0);border-radius:2px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--heat1),var(--heat2))}
+  #spark{width:100%;height:52px;margin-top:6px;border:1px solid var(--line)}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+         padding:6px 10px;white-space:nowrap;overflow-x:auto}
+  .tok{display:inline-block;padding:1px 6px;margin-right:4px;border:1px solid var(--line);
+       border-radius:3px;cursor:pointer;font-size:12px}
+  .tok.sel{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+  .empty{color:var(--muted);padding:16px 0}
+  .node{cursor:pointer;stroke:var(--ink);stroke-width:1}
+  .node.sel{stroke-width:2.5}
+  .node.local{stroke-dasharray:3 2}
+  .lbl{font:10px var(--mono);fill:var(--muted);pointer-events:none}
+  .layerlbl{font:10px var(--mono);fill:var(--muted)}
+  .wire{stroke:var(--line);fill:none}
+  .spine{stroke:var(--ink);fill:none;stroke-linecap:round}
+  .moe-chip{fill:var(--panel);stroke:var(--muted);stroke-width:.75}
+  button{touch-action:manipulation}
+  @media (max-width:700px){
+    header{padding:6px 10px;gap:8px}
+    header h1{font-size:13px}
+    #model{display:none}
+    .ctl{margin-left:0;width:100%;justify-content:space-between}
+    .ctl button{flex:1;padding:7px 4px;font-size:11px;white-space:nowrap}
+    /* detail panel becomes a bottom sheet, shown only when a node is selected */
+    #side{position:absolute;left:0;right:0;bottom:0;width:auto;max-height:46%;
+          border-left:none;border-top:2px solid var(--ink);border-radius:10px 10px 0 0;
+          box-shadow:0 -6px 18px rgba(34,52,74,.18);
+          transform:translateY(105%);transition:transform .22s ease}
+    #side.open{transform:translateY(0)}
+    #side-close{display:block}
+    .tok{padding:6px 10px;margin-right:6px}
+    footer{padding:8px 10px}
+  }
+  @media (prefers-reduced-motion: reduce){ #side{transition:none} }
+  /* exploded router overlay */
+  #explode{position:absolute;inset:0;background:var(--paper);display:flex;
+           flex-direction:column;z-index:6}
+  #explode[hidden]{display:none}
+  #explbar{display:flex;gap:8px;align-items:center;padding:6px 10px;
+           border-bottom:1px solid var(--line);background:var(--panel);font-size:12px}
+  #explbar .sp{flex:1}
+  #explwrap{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:8px}
+  #explsvg{display:block;margin:0 auto}
+  .fbox{fill:var(--panel);stroke:var(--ink);stroke-width:1;rx:4}
+  .flbl{font:10px var(--mono);fill:var(--ink)}
+  .fmut{font:9px var(--mono);fill:var(--muted)}
+  .fedge{fill:none;stroke:var(--muted)}
+  .fedge.hot{stroke:var(--heat2)}
+</style>
+</head>
+<body>
+<header>
+  <h1>gemma-graph</h1><span id="model">—</span>
+  <div class="ctl">
+    <button id="btn-moe" class="active">MoE 26B-A4B</button>
+    <button id="btn-dense">dense E4B</button>
+    <button id="btn-play">⏸ pause</button>
+    <button id="btn-seed">reseed</button>
+  </div>
+</header>
+<main>
+  <div id="graphwrap"></div>
+  <div id="explode" hidden>
+    <div id="explbar">
+      <strong id="expltitle">router</strong><span id="expltok" style="color:var(--muted)"></span>
+      <span class="sp"></span>
+      <button id="expl-out">−</button><button id="expl-in">+</button>
+      <button id="expl-close">✕ close</button>
+    </div>
+    <div id="explwrap"><svg id="explsvg" viewBox="0 0 700 560"></svg></div>
+  </div>
+  <aside id="side">
+    <button id="side-close" aria-label="Close details">✕</button>
+    <h2 style="margin-top:0">Node</h2>
+    <div id="detail" class="empty">Click any node — attention block, MLP/MoE block,
+      or a residual-spine segment.</div>
+  </aside>
+</main>
+<footer id="tokens"></footer>
+
+<script>
+'use strict';
+// ------------------------------------------------- seeded RNG (mulberry32) --
+function rngFactory(seed){ let a=seed>>>0; return function(){
+  a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; };}
+let seed = 42;
+
+// ------------------------------------------------- mock model + generator --
+const TEXT = ("the model reads each token and updates its residual stream layer "
+  + "by layer until the final norm projects back into vocabulary space and the "
+  + "next token is sampled from the resulting distribution .").split(" ");
+const LAYERS = 24, HEADS = 8, EXPERTS = 16, TOPK = 2, MAXTOK = 120;
+
+function makeSim(moe){
+  const rnd = rngFactory(seed);
+  const u = (a,b)=>a+(b-a)*rnd();
+  const sample = (n,k)=>{const s=new Set();while(s.size<k)s.add(Math.floor(rnd()*n));return [...s];};
+  const topo = {model: moe?'mock-24L-moe (26B-A4B-like)':'mock-24L-dense (E4B-like)',
+    layers:[...Array(LAYERS)].map((_,i)=>({i,
+      attn:{kind:(i+1)%4===0?'global':'local',heads:HEADS},
+      mlp: moe?{kind:'moe',experts:EXPERTS,topk:TOPK}:{kind:'dense',experts:0,topk:0}}))};
+  const spikes = new Set(sample(LAYERS, 3).filter(x=>x>=2));
+  const dom = [...Array(LAYERS)].map(()=>sample(HEADS,2));
+  const pools = [...Array(LAYERS)].map(()=>sample(EXPERTS,4));
+  const walk = [...Array(LAYERS)].map(()=>u(0.8,1.2));
+  let t = 0;
+  function next(){
+    if(t>=MAXTOK) return null;
+    const layers = topo.layers.map((L,i)=>{
+      walk[i]=Math.min(2,Math.max(0.4,walk[i]+u(-0.08,0.08)));
+      const depth=1+3.2*Math.pow(i/(LAYERS-1),1.3);
+      const g=L.attn.kind==='global'?1.15:1;
+      const attn=depth*g*walk[i]*u(0.85,1.15);
+      const mlp=depth*walk[i]*(spikes.has(i)?2.2:1)*u(0.9,1.25);
+      const entry={i,attn_norm:attn,mlp_norm:mlp,resid_norm:depth*6*u(0.95,1.05),
+        head_norms:[...Array(HEADS)].map((_,h)=>attn*(dom[i].includes(h)?1.6:0.55)*u(0.8,1.2))};
+      if(moe){
+        if(rnd()<0.08) pools[i][Math.floor(rnd()*4)]=Math.floor(rnd()*EXPERTS);
+        // full router distribution: pool experts get boosted logits
+        const logits=[...Array(EXPERTS)].map((_,e)=>
+          u(-2,0)+(pools[i].includes(e)?u(1.5,3):0));
+        const mxl=Math.max(...logits);
+        const ex=logits.map(l=>Math.exp(l-mxl)), s=ex.reduce((a,b)=>a+b,0);
+        entry.router=ex.map(v=>v/s);
+        entry.expert_weights=entry.router.map((w,e)=>[e,w])
+          .sort((a,b)=>b[1]-a[1]).slice(0,TOPK);
+      }
+      return entry;
+    });
+    return {t:t, text:TEXT[t++ % TEXT.length], layers};
+  }
+  return {topo, next};
+}
+
+// ---------------------------------------------------------------- state ----
+let sim=null, topo=null, frames=[], selT=-1, selNode=null, moe=true, playing=true;
+let runMax={};
+const NODE_W=88, NODE_H=25, ROW_H=42, SPINE_X=240, GAP=66;
+
+function heat(v){
+  const st=[[216,222,230],[227,155,45],[176,46,60]];
+  const x=Math.max(0,Math.min(1,v))*2, i=x<1?0:1, f=x-i;
+  const c=st[i].map((a,k)=>Math.round(a+(st[i+1][k]-a)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function norm(kind,i,v){const k=kind+i;runMax[k]=Math.max(runMax[k]||1e-9,v);return v/runMax[k];}
+
+// deterministic sub-generators keyed on (seed, token, layer) --------------
+function subRng(t,i,salt){return rngFactory(((seed*2654435761)^(t*40503)^(i*2246822519)^salt)>>>0);}
+
+// mock attention matrix over the last N tokens: banded for local (SWA w=8),
+// full lower-triangular with an attention sink at k=0 for global layers
+function attnMatrix(t,i,kind){
+  const N=Math.min(t+1,24), W=8, rnd=subRng(t,i,7);
+  const M=[];
+  for(let q=0;q<N;q++){
+    const row=new Array(N).fill(0);
+    for(let k=0;k<=q;k++){
+      const d=q-k;
+      let w;
+      if(kind==='local') w=d<W?Math.exp(-d/2.5)*(0.6+0.8*rnd()):0.001*rnd();
+      else{
+        w=Math.exp(-d/9)*(0.4+0.6*rnd());          // recency
+        if(k===0)w+=1.2+0.8*rnd();                  // attention sink
+        if(k%7===3)w+=0.5*rnd();                    // stripe heads
+      }
+      row[k]=w;
+    }
+    const s=row.reduce((a,b)=>a+b,0)||1;
+    M.push(row.map(v=>v/s));
+  }
+  return M;
+}
+
+// pre-activation gaussian samples and their GeLU image (sparsification)
+function gelu(x){return 0.5*x*(1+Math.tanh(0.7978845608*(x+0.044715*x*x*x)));}
+function actSamples(t,i){
+  const rnd=subRng(t,i,13), pre=[];
+  for(let k=0;k<96;k++){
+    let g=0;for(let j=0;j<6;j++)g+=rnd(); g=(g-3)*1.6-0.3;   // ~N(-0.3,1.6)
+    pre.push(g);
+  }
+  return {pre, post:pre.map(gelu)};
+}
+
+// ---------------------------------------------------------------- build ----
+function buildGraph(){
+  const wrap=document.getElementById('graphwrap');
+  wrap.innerHTML='';
+  const H=topo.layers.length*ROW_H+56;
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox',`0 0 520 ${H}`); svg.id='g';
+  let s=`<line class="spine" x1="${SPINE_X}" y1="20" x2="${SPINE_X}" y2="${H-16}" stroke-width="3"/>`;
+  s+=`<text class="lbl" x="${SPINE_X}" y="13" text-anchor="middle">residual stream ↓</text>`;
+  topo.layers.forEach(L=>{
+    const y=30+L.i*ROW_H, ax=SPINE_X-GAP-NODE_W, mx=SPINE_X+GAP;
+    s+=`<path class="wire" d="M${SPINE_X},${y-5} C${ax+NODE_W+28},${y-5} ${ax+NODE_W+10},${y+NODE_H/2} ${ax+NODE_W},${y+NODE_H/2}"/>`;
+    s+=`<path class="wire" d="M${ax+NODE_W},${y+NODE_H/2} C${ax+NODE_W+10},${y+NODE_H/2} ${SPINE_X-18},${y+15} ${SPINE_X},${y+15}"/>`;
+    s+=`<path class="wire" d="M${SPINE_X},${y+1} C${mx-28},${y+1} ${mx-10},${y+NODE_H/2} ${mx},${y+NODE_H/2}"/>`;
+    s+=`<path class="wire" d="M${mx+NODE_W},${y+NODE_H/2} C${mx+NODE_W+14},${y+NODE_H/2} ${SPINE_X+20},${y+22} ${SPINE_X},${y+22}"/>`;
+    s+=`<line id="resid-${L.i}" class="spine" x1="${SPINE_X}" y1="${y-7}" x2="${SPINE_X}" y2="${y+ROW_H-13}" stroke-width="3"/>`;
+    s+=`<rect id="attn-${L.i}" class="node ${L.attn.kind==='local'?'local':''}" x="${ax}" y="${y}" rx="4" width="${NODE_W}" height="${NODE_H}" fill="${heat(0)}"/>`;
+    s+=`<text class="lbl" x="${ax+NODE_W/2}" y="${y+16}" text-anchor="middle">ATTN ${L.attn.kind==='global'?'◉':'◌'}</text>`;
+    s+=`<rect id="mlp-${L.i}" class="node" x="${mx}" y="${y}" rx="4" width="${NODE_W}" height="${NODE_H}" fill="${heat(0)}"/>`;
+    s+=`<text class="lbl" x="${mx+NODE_W/2}" y="${y+16}" text-anchor="middle">${L.mlp.kind==='moe'?'MoE 16e':'MLP'}</text>`;
+    if(L.mlp.kind==='moe'){
+      for(let e=0;e<16;e++)
+        s+=`<rect id="ex-${L.i}-${e}" class="moe-chip" x="${mx+NODE_W+7+(e%8)*8.5}" y="${y+(e<8?2:12)}" width="6.5" height="6.5" rx="1"/>`;
+    }
+    s+=`<text class="layerlbl" x="14" y="${y+16}">L${String(L.i).padStart(2,'0')}</text>`;
+    // invisible enlarged hit targets (finger-sized) on top of everything
+    s+=`<rect data-kind="attn" data-i="${L.i}" x="${ax-6}" y="${y-8}" width="${NODE_W+12}" height="${NODE_H+16}" fill="transparent"/>`;
+    s+=`<rect data-kind="mlp" data-i="${L.i}" x="${mx-6}" y="${y-8}" width="${NODE_W+12}" height="${NODE_H+16}" fill="transparent"/>`;
+    s+=`<rect data-kind="resid" data-i="${L.i}" x="${SPINE_X-14}" y="${y-7}" width="28" height="${ROW_H-6}" fill="transparent"/>`;
+  });
+  svg.innerHTML=s;
+  wrap.appendChild(svg);
+  svg.addEventListener('click',ev=>{
+    const d=ev.target.dataset||{};
+    let kind=d.kind, i=d.i!==undefined?+d.i:NaN;
+    if(!kind){const m=(ev.target.id||'').match(/^(attn|mlp|resid)-(\d+)$/);
+      if(m){kind=m[1];i=+m[2];}}
+    if(kind){selNode={kind,i};
+      document.getElementById('side').classList.add('open');paint();}
+  });
+}
+
+// ---------------------------------------------------------------- paint ----
+function frame(){return frames[selT===-1?frames.length-1:selT];}
+function setFill(id,c){const el=document.getElementById(id);el&&(el.style.fill=c);}
+
+function paint(){
+  const f=frame(); if(!topo||!f)return;
+  f.layers.forEach(L=>{
+    setFill('attn-'+L.i,heat(norm('attn',L.i,L.attn_norm)));
+    setFill('mlp-'+L.i,heat(norm('mlp',L.i,L.mlp_norm)));
+    const r=document.getElementById('resid-'+L.i);
+    if(r){const v=norm('resid',L.i,L.resid_norm);
+      r.style.stroke=heat(0.15+0.85*v);
+      r.setAttribute('stroke-width',2+5*v);}
+    if(L.expert_weights){
+      for(let e=0;e<16;e++)setFill(`ex-${L.i}-${e}`,'#FFFFFF');
+      L.expert_weights.forEach(([e,w])=>setFill(`ex-${L.i}-${e}`,heat(0.3+0.7*w)));
+    }
+    ['attn','mlp','resid'].forEach(k=>{
+      const el=document.getElementById(k+'-'+L.i);
+      el&&el.classList.toggle('sel',!!selNode&&selNode.kind===k&&selNode.i===L.i);
+    });
+  });
+  paintDetail(f); paintTokens(); paintExplode(f);
+}
+
+function paintDetail(f){
+  if(!selNode)return;
+  const d=document.getElementById('detail');
+  const L=f.layers[selNode.i], T=topo.layers[selNode.i];
+  const val=selNode.kind==='attn'?L.attn_norm:selNode.kind==='mlp'?L.mlp_norm:L.resid_norm;
+  let html=`<div class="row"><span>layer</span><span>L${selNode.i}</span></div>
+    <div class="row"><span>block</span><span>${selNode.kind==='attn'?'attn · '+T.attn.kind:selNode.kind==='mlp'?(T.mlp.kind==='moe'?'MoE mlp':'dense mlp'):'residual'}</span></div>
+    <div class="big">${val.toFixed(3)}<small style="font-size:11px;color:var(--muted)"> ‖·‖₂ @ t=${f.t}</small></div>`;
+  if(selNode.kind==='attn'&&L.head_norms){
+    html+=`<h2>attn map · last ${Math.min(f.t+1,24)} tok</h2><canvas id="amap" height="150"></canvas>`;
+    const mx=Math.max(...L.head_norms,1e-9);
+    html+=`<h2>heads</h2>`+L.head_norms.map((v,h)=>
+      `<div class="bar"><label>h${h}</label><div class="track"><div class="fill" style="width:${(100*v/mx).toFixed(1)}%"></div></div></div>`).join('');
+  }
+  if(selNode.kind==='mlp'){
+    if(L.router){
+      const top=new Set(L.expert_weights.map(([e])=>e));
+      const mx=Math.max(...L.router,1e-9);
+      html+=`<button id="btn-explode" style="width:100%;margin:4px 0 8px">⤢ explode router flow</button>`;
+      html+=`<h2>router softmax (16 experts)</h2>`+L.router.map((w,e)=>
+        `<div class="bar"><label style="${top.has(e)?'color:var(--heat2);font-weight:600':''}">e${e}</label><div class="track"><div class="fill" style="width:${(100*w/mx).toFixed(1)}%;${top.has(e)?'':'opacity:.4'}"></div></div></div>`).join('');
+    }
+    html+=`<h2>mlp activations · GeLU</h2><canvas id="hist" height="64"></canvas>
+      <div style="font-size:10px;color:var(--muted)">pre (gray) → post (crimson): negative mass collapses to ~0</div>`;
+  }
+  html+=`<h2>norm over tokens</h2><canvas id="spark" height="52"></canvas>`;
+  d.className=''; d.innerHTML=html;
+  const be=document.getElementById('btn-explode');
+  be&&(be.onclick=()=>openExplode(selNode.i));
+  const cv=document.getElementById('spark');
+  const W=Math.max(cv.parentElement.clientWidth-26,160); cv.width=W;
+  const ctx=cv.getContext('2d');
+  const series=frames.map(fr=>{const l=fr.layers[selNode.i];
+    return selNode.kind==='attn'?l.attn_norm:selNode.kind==='mlp'?l.mlp_norm:l.resid_norm;});
+  const mx=Math.max(...series,1e-9);
+  ctx.clearRect(0,0,W,52);ctx.strokeStyle='#B02E3C';ctx.lineWidth=1.5;ctx.beginPath();
+  series.forEach((v,i)=>{const x=i/Math.max(series.length-1,1)*(W-2)+1,y=50-(v/mx)*46;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();
+  // attention heatmap ------------------------------------------------------
+  const am=document.getElementById('amap');
+  if(am){
+    const T=topo.layers[selNode.i];
+    const M=attnMatrix(f.t,selNode.i,T.attn.kind), N=M.length;
+    am.width=W; am.height=W>300?170:150;
+    const c=am.getContext('2d'), cell=Math.floor(Math.min(W,am.height)/N);
+    c.fillStyle='#0F1B2A'; c.fillRect(0,0,W,am.height);
+    const mA=Math.max(...M.flat(),1e-9);
+    const mapHeat=v=>{const st=[[15,27,42],[227,155,45],[176,46,60]];
+      const x=Math.max(0,Math.min(1,v))*2,ii=x<1?0:1,ff=x-ii;
+      const cc=st[ii].map((a,k)=>Math.round(a+(st[ii+1][k]-a)*ff));
+      return `rgb(${cc[0]},${cc[1]},${cc[2]})`;};
+    for(let q=0;q<N;q++)for(let k=0;k<N;k++){
+      c.fillStyle=mapHeat(M[q][k]/mA); c.fillRect(k*cell,q*cell,cell-0.5,cell-0.5);
+    }
+    c.fillStyle='#6B7A8C'; c.font='9px monospace';
+    c.fillText(T.attn.kind==='local'?'sliding window w=8':'full + sink@k0',N*cell+4,10);
+  }
+  // pre/post-GeLU histograms ----------------------------------------------
+  const hc=document.getElementById('hist');
+  if(hc){
+    hc.width=W;
+    const {pre,post}=actSamples(f.t,selNode.i);
+    const c=hc.getContext('2d'); c.clearRect(0,0,W,64);
+    const B=24, lo=-4, hi=4, bw=W/B;
+    const bins=v=>{const b=new Array(B).fill(0);
+      v.forEach(x=>{const j=Math.max(0,Math.min(B-1,Math.floor((x-lo)/(hi-lo)*B)));b[j]++;});
+      return b;};
+    const bp=bins(pre), bq=bins(post), mh=Math.max(...bp,...bq,1);
+    bp.forEach((v,j)=>{c.fillStyle='rgba(107,122,140,.45)';
+      c.fillRect(j*bw,62-58*v/mh,bw-1,58*v/mh);});
+    bq.forEach((v,j)=>{c.fillStyle='rgba(176,46,60,.75)';
+      c.fillRect(j*bw+1,62-58*v/mh,bw-3,58*v/mh);});
+    c.strokeStyle='#C9D2DB'; c.beginPath();
+    c.moveTo(W/2,0); c.lineTo(W/2,64); c.stroke();   // x = 0 marker
+  }
+}
+
+function paintTokens(){
+  const el=document.getElementById('tokens');
+  el.innerHTML=frames.map((f,i)=>
+    `<span class="tok ${(selT===-1?i===frames.length-1:i===selT)?'sel':''}" data-t="${i}">${f.text}</span>`).join('');
+  if(selT===-1)el.scrollLeft=el.scrollWidth;
+}
+document.getElementById('tokens').addEventListener('click',ev=>{
+  const t=ev.target.dataset?.t; if(t===undefined)return;
+  selT=(+t===frames.length-1)?-1:+t; paint();
+});
+
+// ---------------------------------------------------------------- loop -----
+function reset(){
+  sim=makeSim(moe); topo=sim.topo; frames=[]; selT=-1; runMax={};
+  explLayer=null; document.getElementById('explode').hidden=true;
+  if(selNode&&selNode.kind==='mlp'&&!moe)selNode={kind:'mlp',i:selNode.i};
+  document.getElementById('model').textContent=topo.model+' · '+LAYERS+'L';
+  buildGraph();
+  const f=sim.next(); if(f){frames.push(f);paint();}
+}
+setInterval(()=>{
+  if(!playing||!sim)return;
+  const f=sim.next();
+  if(f){frames.push(f);paint();}
+  else{playing=false;document.getElementById('btn-play').textContent='▶ replay';}
+},280);
+
+document.getElementById('btn-play').onclick=e=>{
+  if(!playing&&frames.length>=MAXTOK){reset();playing=true;}
+  else playing=!playing;
+  e.target.textContent=playing?'⏸ pause':'▶ play';
+};
+document.getElementById('btn-seed').onclick=()=>{seed=Math.floor(Math.random()*1e6);reset();playing=true;document.getElementById('btn-play').textContent='⏸ pause';};
+document.getElementById('btn-moe').onclick=()=>{moe=true;toggleBtns();reset();};
+document.getElementById('btn-dense').onclick=()=>{moe=false;toggleBtns();reset();};
+document.getElementById('side-close').onclick=ev=>{
+  ev.stopPropagation();
+  document.getElementById('side').classList.remove('open');
+  selNode=null;paint();
+};
+// ------------------------------------------------ exploded router view -----
+let explLayer=null, explZ=1;
+const EX_COL=[336,470], EX_Y0=44, EX_DY=60, EX_W=92, EX_H=26;
+
+function expertPos(e){return {x:EX_COL[e<8?0:1], y:EX_Y0+(e%8)*EX_DY};}
+
+function buildExplode(li){
+  const svg=document.getElementById('explsvg');
+  let s='';
+  // input token → hidden state
+  s+=`<rect class="fbox" x="16" y="240" width="86" height="34" rx="4"/>`;
+  s+=`<text class="flbl" x="59" y="254" text-anchor="middle">token</text>`;
+  s+=`<text class="flbl" id="expl-token" x="59" y="267" text-anchor="middle" font-weight="600">·</text>`;
+  s+=`<path class="fedge" d="M102,257 L128,257" stroke-width="2"/>`;
+  // router box with 16 softmax bars
+  s+=`<rect class="fbox" x="130" y="196" width="120" height="122" rx="4"/>`;
+  s+=`<text class="flbl" x="190" y="211" text-anchor="middle">router · softmax</text>`;
+  for(let e=0;e<16;e++)
+    s+=`<rect id="rb-${e}" x="${137+e*6.8}" y="306" width="5" height="2" fill="var(--heat1)"/>`;
+  s+=`<text class="fmut" x="190" y="330" text-anchor="middle">16 logits → probs</text>`;
+  // edges router → experts, expert boxes, expert → sum edges
+  for(let e=0;e<16;e++){
+    const p=expertPos(e);
+    s+=`<path id="ee-${e}" class="fedge" d="M250,${257} C300,${257} ${p.x-46},${p.y+EX_H/2} ${p.x},${p.y+EX_H/2}"/>`;
+    s+=`<rect id="eb-${e}" class="fbox" x="${p.x}" y="${p.y}" width="${EX_W}" height="${EX_H}" rx="4"/>`;
+    s+=`<text class="flbl" x="${p.x+8}" y="${p.y+17}">E${String(e).padStart(2,'0')}</text>`;
+    s+=`<text class="fmut" id="ew-${e}" x="${p.x+EX_W-8}" y="${p.y+17}" text-anchor="end"></text>`;
+    s+=`<path id="es-${e}" class="fedge" d="M${p.x+EX_W},${p.y+EX_H/2} C${p.x+EX_W+40},${p.y+EX_H/2} 596,${250} 618,${257}"/>`;
+  }
+  // weighted sum → output
+  s+=`<circle class="fbox" cx="632" cy="257" r="16"/>`;
+  s+=`<text class="flbl" x="632" y="261" text-anchor="middle">Σ</text>`;
+  s+=`<path class="fedge" d="M648,257 L668,257" stroke-width="2"/>`;
+  s+=`<text class="fmut" id="expl-out-norm" x="668" y="243" text-anchor="end"></text>`;
+  s+=`<text class="fmut" x="668" y="272" text-anchor="end">→ resid</text>`;
+  svg.innerHTML=s;
+  document.getElementById('expltitle').textContent=`L${li} MoE router · top-${TOPK} of 16`;
+}
+
+function paintExplode(f){
+  if(explLayer===null||!f)return;
+  const L=f.layers[explLayer];
+  if(!L||!L.router)return;
+  document.getElementById('expltok').textContent=` · t=${f.t} "${f.text}"`;
+  document.getElementById('expl-token').textContent=f.text.slice(0,9);
+  const top=new Set(L.expert_weights.map(([e])=>e));
+  const mx=Math.max(...L.router,1e-9);
+  L.router.forEach((p,e)=>{
+    const rb=document.getElementById('rb-'+e);
+    if(rb){const h=Math.max(2,100*p/mx*0.9);
+      rb.setAttribute('height',h);rb.setAttribute('y',308-h);}
+    const ee=document.getElementById('ee-'+e), es=document.getElementById('es-'+e);
+    const hot=top.has(e);
+    [ee,es].forEach(el=>{if(!el)return;
+      el.classList.toggle('hot',hot);
+      el.setAttribute('stroke-width',(0.5+9*p).toFixed(2));
+      el.setAttribute('stroke-opacity',(hot?0.95:0.15+0.5*p/mx).toFixed(2));});
+    const eb=document.getElementById('eb-'+e);
+    eb&&(eb.style.fill=hot?heat(0.35+0.65*p):'#FFFFFF');
+    const ew=document.getElementById('ew-'+e);
+    ew&&(ew.textContent=hot?(100*p).toFixed(1)+'%':'');
+  });
+  document.getElementById('expl-out-norm').textContent='‖out‖ '+L.mlp_norm.toFixed(2);
+}
+
+function setExplZoom(){
+  const svg=document.getElementById('explsvg');
+  const w=Math.min(document.getElementById('explwrap').clientWidth-16,700)*explZ;
+  svg.style.width=w+'px'; svg.style.height='auto';
+}
+function openExplode(li){
+  explLayer=li; buildExplode(li);
+  document.getElementById('explode').hidden=false;
+  document.getElementById('side').classList.remove('open');
+  explZ=1; setExplZoom(); paintExplode(frame());
+}
+document.getElementById('expl-close').onclick=()=>{
+  document.getElementById('explode').hidden=true; explLayer=null;};
+document.getElementById('expl-in').onclick=()=>{explZ=Math.min(3,explZ*1.35);setExplZoom();};
+document.getElementById('expl-out').onclick=()=>{explZ=Math.max(0.6,explZ/1.35);setExplZoom();};
+
+function toggleBtns(){
+  document.getElementById('btn-moe').classList.toggle('active',moe);
+  document.getElementById('btn-dense').classList.toggle('active',!moe);
+}
+reset();
+</script>
+</body>
+</html>

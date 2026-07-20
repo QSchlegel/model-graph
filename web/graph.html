@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gemma-graph</title>
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat0:#D8DEE6; --heat1:#E39B2D; --heat2:#B02E3C;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font:13px/1.45 var(--mono);
+       display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;gap:16px;align-items:baseline;padding:10px 16px;
+         border-bottom:1px solid var(--line);background:var(--panel)}
+  header h1{font-size:14px;font-weight:600;letter-spacing:.04em}
+  #model{color:var(--muted)}
+  #status{margin-left:auto;font-size:12px;color:var(--muted)}
+  #status::before{content:'●';margin-right:6px;color:#B02E3C}
+  #status.on::before{color:#3E7C4F}
+  main{flex:1;display:flex;min-height:0}
+  #graphwrap{flex:1;overflow:auto;padding:12px 0}
+  svg{display:block;margin:0 auto}
+  #side{width:280px;border-left:1px solid var(--line);background:var(--panel);
+        padding:14px;overflow:auto}
+  #side h2{font-size:12px;font-weight:600;text-transform:uppercase;
+           letter-spacing:.08em;color:var(--muted);margin-bottom:8px}
+  #side .big{font-size:22px;font-weight:600;margin:2px 0 10px}
+  #side .row{display:flex;justify-content:space-between;padding:3px 0;
+             border-bottom:1px dashed var(--line);font-size:12px}
+  #side .row span:last-child{font-weight:600}
+  .bars{margin-top:10px}
+  .bar{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .bar label{width:34px;color:var(--muted);font-size:11px;text-align:right}
+  .bar .track{flex:1;height:9px;background:var(--heat0);border-radius:2px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--heat1),var(--heat2))}
+  #spark{width:100%;height:56px;margin-top:10px;border:1px solid var(--line)}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+         padding:8px 12px;white-space:nowrap;overflow-x:auto}
+  .tok{display:inline-block;padding:2px 6px;margin-right:4px;border:1px solid var(--line);
+       border-radius:3px;cursor:pointer;font-size:12px;color:var(--ink)}
+  .tok.sel{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+  .empty{color:var(--muted);padding:24px;text-align:center}
+  /* graph elements */
+  .node{cursor:pointer;stroke:var(--ink);stroke-width:1}
+  .node.sel{stroke-width:2.5}
+  .node.local{stroke-dasharray:3 2}
+  .lbl{font:10px var(--mono);fill:var(--muted);pointer-events:none}
+  .layerlbl{font:10px var(--mono);fill:var(--muted)}
+  .wire{stroke:var(--line);fill:none}
+  .spine{stroke:var(--ink);fill:none;stroke-linecap:round}
+  .moe-chip{fill:var(--panel);stroke:var(--muted);stroke-width:.75}
+</style>
+</head>
+<body>
+<header>
+  <h1>gemma-graph</h1><span id="model">—</span>
+  <span id="status">connecting ws://localhost:8765</span>
+</header>
+<main>
+  <div id="graphwrap"><div class="empty" id="empty">Waiting for topology…<br>
+    <small>python server.py --mock</small></div></div>
+  <aside id="side">
+    <h2>Node</h2>
+    <div id="detail" class="empty" style="padding:12px 0">Click a node</div>
+  </aside>
+</main>
+<footer id="tokens"></footer>
+
+<script>
+'use strict';
+// ---------------------------------------------------------------- state ----
+let topo = null;            // topology message
+let frames = [];            // token messages, index = t
+let selT = -1;              // selected token (-1 = follow latest)
+let selNode = null;         // {kind:'attn'|'mlp'|'resid', i}
+const runMax = {};          // per-node running max, key = kind+i
+const NODE_W = 92, NODE_H = 26, ROW_H = 44, SPINE_X = 260, GAP = 74;
+
+// ------------------------------------------------------------- heat ramp ---
+function heat(v){ // v in [0,1] -> paper-gray → amber → crimson
+  const stops = [[216,222,230],[227,155,45],[176,46,60]];
+  const x = Math.max(0, Math.min(1, v)) * 2;
+  const i = x < 1 ? 0 : 1, f = x - i;
+  const c = stops[i].map((a,k)=>Math.round(a+(stops[i+1][k]-a)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
+function norm(kind, i, v){
+  const k = kind + i;
+  runMax[k] = Math.max(runMax[k] || 1e-9, v);
+  return v / runMax[k];
+}
+
+// ---------------------------------------------------------------- build ----
+function buildGraph(){
+  document.getElementById('empty')?.remove();
+  const H = topo.layers.length * ROW_H + 60;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('width', 560); svg.setAttribute('height', H);
+  svg.id = 'g';
+  let s = `<line class="spine" x1="${SPINE_X}" y1="20" x2="${SPINE_X}" y2="${H-20}" stroke-width="3" id="spine"/>`;
+  s += `<text class="lbl" x="${SPINE_X}" y="14" text-anchor="middle">residual stream ↓</text>`;
+  topo.layers.forEach(L=>{
+    const y = 34 + L.i * ROW_H;
+    const ax = SPINE_X - GAP - NODE_W, mx = SPINE_X + GAP;
+    // wires: spine → attn → spine, spine → mlp → spine
+    s += `<path class="wire" d="M${SPINE_X},${y-6} C${ax+NODE_W+30},${y-6} ${ax+NODE_W+10},${y+NODE_H/2} ${ax+NODE_W},${y+NODE_H/2}"/>`;
+    s += `<path class="wire" d="M${ax+NODE_W},${y+NODE_H/2} C${ax+NODE_W+10},${y+NODE_H/2} ${SPINE_X-20},${y+16} ${SPINE_X},${y+16}"/>`;
+    s += `<path class="wire" d="M${SPINE_X},${y+2} C${mx-30},${y+2} ${mx-10},${y+NODE_H/2} ${mx},${y+NODE_H/2}"/>`;
+    s += `<path class="wire" d="M${mx+NODE_W},${y+NODE_H/2} C${mx+NODE_W+16},${y+NODE_H/2} ${mx+NODE_W+16},${y+24} ${SPINE_X},${y+24}" transform="translate(${-(mx+NODE_W+16-SPINE_X)*0},0)"/>`;
+    // spine tap segment (colored by resid_norm)
+    s += `<line id="resid-${L.i}" class="spine" x1="${SPINE_X}" y1="${y-8}" x2="${SPINE_X}" y2="${y+ROW_H-14}" stroke-width="3"/>`;
+    // attn node
+    const akind = L.attn.kind === 'local' ? 'local' : '';
+    s += `<rect id="attn-${L.i}" class="node ${akind}" x="${ax}" y="${y}" rx="4" width="${NODE_W}" height="${NODE_H}" fill="${heat(0)}"/>`;
+    s += `<text class="lbl" x="${ax+NODE_W/2}" y="${y+16}" text-anchor="middle">ATTN ${L.attn.kind==='global'?'◉':L.attn.kind==='local'?'◌':''}</text>`;
+    // mlp node (+ MoE chips)
+    s += `<rect id="mlp-${L.i}" class="node" x="${mx}" y="${y}" rx="4" width="${NODE_W}" height="${NODE_H}" fill="${heat(0)}"/>`;
+    s += `<text class="lbl" x="${mx+NODE_W/2}" y="${y+16}" text-anchor="middle">${L.mlp.kind==='moe'?'MoE '+L.mlp.experts+'e':'MLP'}</text>`;
+    if(L.mlp.kind==='moe'){
+      for(let e=0;e<Math.min(L.mlp.experts,16);e++){
+        s += `<rect id="ex-${L.i}-${e}" class="moe-chip" x="${mx+NODE_W+8+(e%8)*9}" y="${y+ (e<8?2:12)}" width="7" height="7" rx="1"/>`;
+      }
+    }
+    s += `<text class="layerlbl" x="18" y="${y+17}">L${String(L.i).padStart(2,'0')}</text>`;
+  });
+  svg.innerHTML = s;
+  document.getElementById('graphwrap').appendChild(svg);
+  svg.addEventListener('click', ev=>{
+    const id = ev.target.id || '';
+    const m = id.match(/^(attn|mlp|resid)-(\d+)$/);
+    if(m){ selNode = {kind:m[1], i:+m[2]}; paint(); }
+  });
+}
+
+// ---------------------------------------------------------------- paint ----
+function frame(){ return frames[selT === -1 ? frames.length-1 : selT]; }
+
+function paint(){
+  const f = frame(); if(!topo || !f) return;
+  f.layers.forEach(L=>{
+    setFill('attn-'+L.i, heat(norm('attn',L.i,L.attn_norm)));
+    setFill('mlp-'+L.i,  heat(norm('mlp', L.i,L.mlp_norm)));
+    const r = document.getElementById('resid-'+L.i);
+    if(r){ const v = norm('resid',L.i,L.resid_norm);
+           r.setAttribute('stroke', heat(0.15+0.85*v));
+           r.setAttribute('stroke-width', 2 + 5*v); }
+    if(L.expert_weights){
+      const layer = topo.layers[L.i];
+      for(let e=0;e<Math.min(layer.mlp.experts,16);e++) setFill(`ex-${L.i}-${e}`, 'var(--panel)');
+      L.expert_weights.forEach(([e,w])=>setFill(`ex-${L.i}-${e}`, heat(0.3+0.7*w)));
+    }
+    ['attn','mlp','resid'].forEach(k=>{
+      const el = document.getElementById(k+'-'+L.i);
+      el && el.classList.toggle('sel', !!selNode && selNode.kind===k && selNode.i===L.i);
+    });
+  });
+  paintDetail(f); paintTokens();
+}
+function setFill(id,c){ const el=document.getElementById(id); el&&el.setAttribute('fill',c); }
+
+function paintDetail(f){
+  const d = document.getElementById('detail');
+  if(!selNode){ return; }
+  const L = f.layers[selNode.i], T = topo.layers[selNode.i];
+  const val = selNode.kind==='attn'?L.attn_norm:selNode.kind==='mlp'?L.mlp_norm:L.resid_norm;
+  let html = `<div class="row"><span>layer</span><span>L${selNode.i}</span></div>
+    <div class="row"><span>block</span><span>${selNode.kind==='attn'?'attention ('+T.attn.kind+')':selNode.kind==='mlp'?(T.mlp.kind==='moe'?'MoE mlp':'dense mlp'):'residual'}</span></div>
+    <div class="big">${val.toFixed(3)}<small style="font-size:11px;color:var(--muted)"> ‖·‖₂ @ t=${f.t}</small></div>`;
+  if(selNode.kind==='attn' && L.head_norms?.length){
+    const mx = Math.max(...L.head_norms, 1e-9);
+    html += `<h2>heads</h2><div class="bars">` + L.head_norms.map((v,h)=>
+      `<div class="bar"><label>h${h}</label><div class="track"><div class="fill" style="width:${(100*v/mx).toFixed(1)}%"></div></div></div>`).join('') + `</div>`;
+  }
+  if(selNode.kind==='mlp' && L.expert_weights){
+    html += `<h2>routed experts</h2><div class="bars">` + L.expert_weights.map(([e,w])=>
+      `<div class="bar"><label>e${e}</label><div class="track"><div class="fill" style="width:${(100*w).toFixed(1)}%"></div></div></div>`).join('') + `</div>`;
+  }
+  html += `<h2 style="margin-top:12px">norm over tokens</h2><canvas id="spark" width="250" height="56"></canvas>`;
+  d.className=''; d.innerHTML = html;
+  const ctx = document.getElementById('spark').getContext('2d');
+  const series = frames.map(fr=>{const l=fr.layers[selNode.i];
+    return selNode.kind==='attn'?l.attn_norm:selNode.kind==='mlp'?l.mlp_norm:l.resid_norm;});
+  const mx = Math.max(...series,1e-9);
+  ctx.clearRect(0,0,250,56); ctx.strokeStyle='#B02E3C'; ctx.lineWidth=1.5; ctx.beginPath();
+  series.forEach((v,i)=>{const x=i/(Math.max(series.length-1,1))*248+1, y=54-(v/mx)*50;
+    i?ctx.lineTo(x,y):ctx.moveTo(x,y);});
+  ctx.stroke();
+}
+
+function paintTokens(){
+  const el = document.getElementById('tokens');
+  el.innerHTML = frames.map((f,i)=>
+    `<span class="tok ${(selT===-1?i===frames.length-1:i===selT)?'sel':''}" data-t="${i}">${
+      f.text.replace(/</g,'&lt;').replace(/ /g,'·') || '∅'}</span>`).join('');
+  if(selT===-1) el.scrollLeft = el.scrollWidth;
+}
+document.getElementById('tokens').addEventListener('click', ev=>{
+  const t = ev.target.dataset?.t; if(t===undefined) return;
+  selT = (+t === frames.length-1) ? -1 : +t;   // clicking latest re-enables follow
+  paint();
+});
+
+// ------------------------------------------------------------- websocket ---
+function connect(){
+  const ws = new WebSocket('ws://localhost:8765');
+  const st = document.getElementById('status');
+  ws.onopen = ()=>{ st.textContent='live'; st.classList.add('on'); };
+  ws.onclose = ()=>{ st.textContent='disconnected — retrying'; st.classList.remove('on');
+                     setTimeout(connect, 1500); };
+  ws.onmessage = ev=>{
+    const m = JSON.parse(ev.data);
+    if(m.type==='topology'){
+      topo = m; frames = []; selT = -1; selNode = null;
+      document.getElementById('model').textContent = m.model + ' · ' + m.layers.length + 'L';
+      document.getElementById('g')?.remove(); buildGraph();
+    } else if(m.type==='token'){ frames.push(m); paint(); }
+    else if(m.type==='done'){ st.textContent='done ('+frames.length+' tokens)'; }
+  };
+}
+connect();
+</script>
+</body>
+</html>

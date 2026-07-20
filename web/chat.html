@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>model-graph · chat</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='5' y='5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='13.5' y='5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='5' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='5' y='13.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='13.5' y='13.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='13.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='5' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='13.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='17' r='3.1' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat0:#D8DEE6; --heat1:#E39B2D; --heat2:#B02E3C;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%}
+  body{background:var(--paper);color:var(--ink);font:13px/1.45 var(--mono);
+       display:flex;flex-direction:column}
+  #viz{position:fixed;inset:0;width:100%;height:100%;z-index:0;
+       cursor:crosshair;touch-action:none}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+         padding:8px 12px;border-bottom:1px solid var(--line);
+         position:relative;z-index:2;background:rgba(255,255,255,.86);
+         -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  header h1{font-size:14px;font-weight:600}
+  header h1 a{color:inherit;text-decoration:none}
+  header h1 a:hover{color:var(--heat2)}
+  #stat{color:var(--muted);font-size:12px}
+  #vstat{color:var(--muted);font-size:11px}
+  .ctl{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .ctl label{color:var(--muted);font-size:11px}
+  button,input,select{font:12px var(--mono);color:var(--ink);
+         background:rgba(255,255,255,.8);
+         border:1px solid var(--ink);border-radius:3px;padding:4px 8px}
+  select{max-width:190px}
+  button{cursor:pointer;touch-action:manipulation}
+  button:hover{background:var(--ink);color:var(--panel)}
+  input{border-color:var(--line)}
+  #base{width:210px}
+  #maxtok,#temp{width:52px}
+  #log{flex:1;overflow-y:auto;padding:14px 12px;display:flex;
+       flex-direction:column;gap:10px;position:relative;z-index:1;
+       pointer-events:none}
+  .msg{max-width:76%;padding:8px 11px;border-radius:6px;white-space:pre-wrap;
+       word-break:break-word;border:1px solid var(--line);pointer-events:auto;
+       background:rgba(255,255,255,.82);
+       -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
+  .msg.user{align-self:flex-end;background:rgba(34,52,74,.92);color:var(--panel);
+            border-color:var(--ink)}
+  .msg.assistant{align-self:flex-start}
+  .msg.error{align-self:flex-start;border-color:var(--heat2);color:var(--heat2)}
+  .msg .meta{display:block;margin-top:6px;font-size:10px;color:var(--muted)}
+  .msg.user .meta{color:var(--line)}
+  .msg.assistant.busy::after{content:'▌';color:var(--heat1);
+             animation:blink .8s step-start infinite}
+  @keyframes blink{50%{opacity:0}}
+  footer{border-top:1px solid var(--line);padding:8px 10px;display:flex;gap:8px;
+         align-items:flex-end;position:relative;z-index:2;
+         background:rgba(255,255,255,.86);
+         -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  textarea{flex:1;font:13px/1.45 var(--mono);color:var(--ink);resize:none;
+         border:1px solid var(--line);border-radius:3px;padding:6px 8px;
+         background:rgba(255,255,255,.85);min-height:34px;max-height:140px}
+  #send{border-color:var(--ink)}
+  #loadwrap{width:100%;display:flex;align-items:center;gap:8px;
+       padding-top:2px}
+  #loadwrap[hidden]{display:none}           /* author flex beats UA [hidden] */
+  #loadbar{flex:1;height:6px;background:var(--heat0);border-radius:3px;
+       overflow:hidden}
+  #loadfill{height:100%;width:0%;border-radius:3px;
+       background:linear-gradient(90deg,var(--heat1),var(--heat2));
+       transition:width .25s}
+  #loadwrap.ind #loadfill{width:30%;animation:slide 1.1s linear infinite}
+  @keyframes slide{0%{margin-left:-30%}100%{margin-left:100%}}
+  #loadtxt{font-size:11px;color:var(--muted);white-space:nowrap}
+  .hint{padding:4px 12px;font-size:11px;color:var(--muted);
+        border-bottom:1px solid var(--line);position:relative;z-index:2;
+        background:rgba(255,255,255,.86);
+        -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  .hint a{color:var(--ink)}
+  #tip{position:fixed;z-index:3;pointer-events:none;display:none;
+       background:var(--panel);border:1px solid var(--ink);border-radius:4px;
+       padding:6px 9px;font-size:11px;box-shadow:0 2px 10px rgba(34,52,74,.18);
+       max-width:280px}
+  #tip .t1{font-weight:600}
+  #tip .t2{color:var(--muted);font-size:10px;margin-top:2px}
+  #panel{position:fixed;z-index:4;display:none;width:340px;max-height:72vh;
+       overflow-y:auto;background:var(--panel);border:1px solid var(--ink);
+       border-radius:6px;box-shadow:0 4px 18px rgba(34,52,74,.28);
+       padding:10px 12px;font-size:11px}
+  #panel h3{font-size:11px;font-weight:600;display:flex;
+       justify-content:space-between;align-items:center;gap:8px}
+  #panel h3 .x{cursor:pointer;border:1px solid var(--line);border-radius:3px;
+       padding:0 6px;flex:none}
+  #panel h3 .x:hover{background:var(--ink);color:var(--panel)}
+  #panel h4{font-size:10px;font-weight:600;color:var(--muted);
+       text-transform:uppercase;letter-spacing:.06em;margin:9px 0 3px}
+  #panel .kv{display:flex;justify-content:space-between;
+       border-bottom:1px dashed var(--line);padding:2px 0}
+  #panel .kv span:last-child{color:var(--muted)}
+  #panel .bar{display:flex;align-items:center;gap:5px;margin:2px 0}
+  #panel .bar label{width:30px;color:var(--muted);font-size:10px;
+       text-align:right;flex:none}
+  #panel .bar.tk label{width:86px;text-align:left;color:var(--ink);
+       overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #panel .bar .track{flex:1;height:7px;background:var(--heat0);
+       border-radius:2px;overflow:hidden}
+  #panel .bar .fill{height:100%;
+       background:linear-gradient(90deg,var(--heat1),var(--heat2))}
+  #panel .bar .pv{width:40px;font-size:10px;color:var(--muted);flex:none}
+  #panel .note{font-size:10px;color:var(--muted);margin-top:5px}
+  #panel .hgrid{display:grid;grid-template-columns:1fr 1fr;column-gap:12px}
+  #panel canvas{width:100%;display:block}
+  #panel a{color:var(--ink)}
+  #panel .lens{column-count:2;column-gap:14px}
+  #panel .lrow{display:flex;gap:6px;font-size:10px;padding:1px 3px;
+       border-left:2px solid transparent;break-inside:avoid}
+  #panel .lrow.chg{border-left-color:var(--heat2);
+       background:rgba(227,155,45,.14)}
+  #panel .lrow.sel{outline:1px solid var(--ink)}
+  #panel .lrow .ln{color:var(--muted);width:26px;flex:none}
+  #panel .lrow .lw{flex:1;overflow:hidden;text-overflow:ellipsis;
+       white-space:nowrap}
+  #panel .lrow .lp{color:var(--muted);flex:none}
+  #explain{position:fixed;z-index:5;top:52px;right:10px;width:440px;
+       max-width:calc(100vw - 20px);max-height:calc(100vh - 130px);
+       overflow-y:auto;background:var(--panel);border:1px solid var(--ink);
+       border-radius:6px;box-shadow:0 4px 18px rgba(34,52,74,.28);
+       padding:12px 14px;font-size:11px;line-height:1.55}
+  #explain h3{font-size:12px;font-weight:600;display:flex;
+       justify-content:space-between;align-items:center;margin-bottom:6px}
+  #explain h3 .x{cursor:pointer;border:1px solid var(--line);
+       border-radius:3px;padding:0 6px}
+  #explain h3 .x:hover{background:var(--ink);color:var(--panel)}
+  #explain h4{font-size:10px;font-weight:600;color:var(--muted);
+       text-transform:uppercase;letter-spacing:.06em;margin:10px 0 3px}
+  #explain p{margin:3px 0}
+  #explain .why{color:var(--muted)}
+  #explain .mode{border:1px solid var(--line);border-radius:5px;
+       padding:7px 9px;margin:8px 0;cursor:pointer}
+  #explain .mode:hover{border-color:var(--ink)}
+  #explain .mode.active{border-color:var(--heat2);
+       outline:1px solid var(--heat2)}
+  #explain .mode.off{opacity:.45;cursor:not-allowed}
+  #explain .mode h4{margin:0 0 3px;color:var(--ink)}
+  #explain code{background:var(--heat0);padding:0 3px;border-radius:2px}
+  #explain ul{margin:2px 0 2px 16px;padding:0}
+  #explain li{margin:2px 0}
+  @media (max-width:760px){
+    .ctl{margin-left:0;width:100%}
+    #base{flex:1;width:auto}
+    .msg{max-width:92%}
+    button,input,select{padding:7px 10px;font-size:13px}  /* finger targets */
+    textarea{font-size:16px}                /* prevents iOS zoom-on-focus */
+    #panel{width:calc(100vw - 16px);left:8px !important;max-height:60vh}
+    #explain{top:auto;bottom:8px;right:8px;max-height:55vh}
+    .hint{display:none}                     /* explainer (?) covers it */
+  }
+</style>
+</head>
+<body>
+<canvas id="viz" aria-hidden="true"></canvas>
+<header>
+  <h1><a href="/" title="about model-graph">model-graph</a> · chat</h1>
+  <span id="stat">connecting…</span>
+  <span id="vstat">viz ○</span>
+  <div class="ctl">
+    <label>engine</label>
+    <select id="engine">
+      <option value="server">server api</option>
+      <option value="observable/SmolLM2-135M-Instruct">browser · SmolLM2-135M observable</option>
+      <option value="HuggingFaceTB/SmolLM2-135M-Instruct">browser · SmolLM2-135M</option>
+      <option value="HuggingFaceTB/SmolLM2-360M-Instruct">browser · SmolLM2-360M</option>
+      <option value="onnx-community/Qwen2.5-0.5B-Instruct">browser · Qwen2.5-0.5B</option>
+    </select>
+    <label>api</label><input id="base" spellcheck="false">
+    <label>max</label><input id="maxtok" value="256" inputmode="numeric">
+    <label>T</label><input id="temp" value="0" inputmode="decimal">
+    <button id="metric" title="cycle heatmap metric (or click the background)">viz: mlp</button>
+    <button id="help" title="what am I looking at?">?</button>
+    <button id="clear">clear</button>
+  </div>
+  <div id="loadwrap" hidden>
+    <div id="loadbar"><div id="loadfill"></div></div>
+    <span id="loadtxt"></span>
+  </div>
+</header>
+<div class="hint">background = live internals of every request · hover to
+  inspect · click a cell → dashboard cut-out, arrow keys navigate it ·
+  dots = logit-lens prediction flips (red = settles on final token) ·
+  empty click switches metric · drag pans ·
+  full <a href="/dashboard" target="_blank">dashboard</a></div>
+<div id="log"></div>
+<footer>
+  <textarea id="in" placeholder="message · enter to send, shift+enter for newline"
+            rows="1"></textarea>
+  <button id="send">send</button>
+</footer>
+<div id="tip"></div>
+<div id="panel"></div>
+<div id="explain" hidden>
+  <h3><span>what am I looking at?</span><span class="x">✕</span></h3>
+  <p>rows = layers (depth, L00 first) · columns = generated tokens (time).
+     each cell is the <b>L2 norm of a block's output</b> for that token —
+     how strongly the block wrote into the residual stream at that step.</p>
+  <p class="why">colors normalize per row against that layer's running max:
+     absolute norms grow with depth, so raw values would drown the early
+     layers. compare color along a row (time), not down a column.</p>
+
+  <div class="mode" data-m="0">
+    <h4>viz: mlp · channel-mixer write</h4>
+    <p>norm of the MLP / feed-forward output — the block that transforms
+       features within one position.</p>
+    <p class="why">why this signal: MLPs hold most of the parameters and act
+       like key→value memories, so this is the closest single proxy for
+       "how much knowledge got injected here". look for: bursts on content
+       words vs quiet function words · hot mid-depth rows where recall
+       happens · what happens on the eos column.</p>
+  </div>
+  <div class="mode" data-m="1">
+    <h4>viz: attn · token-mixer write</h4>
+    <p>norm of the attention output — on <code>C</code> rows (hybrid models
+       like LFM2.5) it is the gated short-conv mixer instead.</p>
+    <p class="why">why this signal: the token mixer is the only place
+       information moves <i>between</i> positions — spikes mean this token
+       pulled hard on context (pronouns, closing quotes, repeated names).
+       compare <code>A</code> vs <code>C</code> rows to see the hybrid's
+       division of labour: conv mixes locally, global attention does
+       long-range retrieval.</p>
+    <p class="why">in this mode <code>A</code> cells subdivide into
+       per-head panels (2×n grid, head h0 top-left, row-major): the
+       interior is the <b>head fingerprint</b> — each panel normalized
+       against the cell's hottest head, so the pattern shows <i>which</i>
+       heads did the work — while the framing border keeps the aggregate
+       attn norm, i.e. <i>how much</i> work. hover a panel to identify the
+       head; recurring fingerprints across columns = specialised heads.</p>
+    <p class="why">server runs also capture <b>where</b> each token looked:
+       select any A cell and its top attention sources draw as arcs over
+       the token strip (blue ◂ = mass on the prompt/context); the cut-out
+       lists them with weights. per-token uncertainty (entropy + top-1
+       margin) rides on every frame — the raw material for reasoning
+       analysis: watch entropy spike at forks and attention snap to the
+       tokens that resolve them.</p>
+  </div>
+  <div class="mode" data-m="2">
+    <h4>viz: resid · residual stream state</h4>
+    <p>norm of the full hidden state after the layer — the accumulated
+       representation that every block writes into.</p>
+    <p class="why">why this signal: the residual stream is the model's
+       working memory. growth with depth is expected (the harness checks
+       L0 &lt; L15), so the information is in deviations — sudden per-token
+       jumps (one layer dominating), unusually flat columns, odd eos
+       behaviour.</p>
+  </div>
+
+  <div class="mode" data-m="3">
+    <h4>viz: embed · residual trajectory</h4>
+    <p>each token's residual vector (2048-d) plotted as one labeled point,
+       projected into 3d (or 2d — press <code>d</code>) and connected in
+       generation order. the <b style="color:#3E7CA8">blue dotted trace</b>
+       is the <b>full context</b> — every prompt position's prefill state,
+       linked to where generation takes over. the right-edge
+       <b>minimap</b> shows all layers' trajectories at once — click a
+       thumb (or ↑/↓) to switch depth. drag rotates · wheel / pinch zooms ·
+       <code>t</code> cycles labels auto→all→off (auto hides colliding
+       labels, recent tokens win) · <code>c</code> toggles context · click
+       a point for its cut-out.</p>
+    <p class="why">why this projection: a <b>fixed random orthonormal
+       basis</b> (seeded) instead of PCA — no refitting while streaming,
+       so the shape never drifts under you and runs are comparable.
+       relative geometry survives approximately: nearby points = similar
+       hidden states. look for: drift as context accumulates · loops on
+       repeated structure (lists!) · jumps at topic shifts · run starts
+       ringed in ink, eos in red · compare early vs late layers (↑/↓) to
+       watch depth untangle the space.</p>
+  </div>
+
+  <h4>dots · logit-lens flips</h4>
+  <p>each layer's residual is decoded through the final norm + unembedding
+     as if the network stopped there (the "logit lens"). a dot = this
+     layer's top-1 prediction differs from the layer below;
+     <b style="color:var(--heat2)">red</b> = it flipped to the token that
+     was actually emitted — the settle layer.</p>
+  <p class="why">why: settle depth is a per-token difficulty meter — echoed
+     and grammatical tokens settle early, semantic choices settle late.
+     click a cell for the full ladder.</p>
+
+  <h4>token strip</h4>
+  <p>the emitted token above each column (red = eos, ↵ = newline). hover
+     for the top-5 alternatives — this is the actual sampling distribution,
+     so at T=0 the winner saturates; raise T to see real spread.</p>
+
+  <h4>cut-out panel · click a cell, arrow keys navigate</h4>
+  <ul>
+    <li><b>lens ladder</b> — the prediction at every depth, flips tinted,
+        settle layer noted</li>
+    <li><b>heads</b> — per-head output norms (measured entering o_proj):
+        which heads are active; attention matrices are not captured
+        (needs eager attention)</li>
+    <li><b>router flow</b> — MoE only: experts chosen for this token plus
+        routing mass across the whole run (spot collapse or imbalance)</li>
+    <li><b>Δ</b> — SSM selectivity, when a dt_proj exists</li>
+    <li><b>sparkline</b> — this layer's current-metric norm over all
+        tokens</li>
+    <li><b>predicted next token</b> — final top-5 = the distribution the
+        sampler actually drew from</li>
+  </ul>
+
+  <h4>engines</h4>
+  <p><b>server api</b> runs the hooked python model — full internals
+     (norms, lens, projections). <b>browser</b> engines run a curated
+     small model entirely in your browser: weights stream directly from
+     huggingface.co and inference runs on <b>WebGPU</b> (wasm fallback)
+     via transformers.js.</p>
+  <p class="why">browser runs DO feed the viz with what is honestly
+     observable client-side: the token strip, run boundaries, and real
+     top-k prediction probabilities (tapped from the logits each step) —
+     hover the strip or click a token. per-layer cells stay pale because
+     a compiled ONNX graph exposes no hidden states — no place to hang
+     hooks.</p>
+  <p class="why">the <b>observable</b> browser model closes most of that
+     gap: its graph was re-exported (export_observable.py) with every
+     layer's residual stream as a declared output, so resid norms, the
+     full embedding trajectory + context trace, and predictions are all
+     computed client-side from real tensors. mlp/attn write norms,
+     per-head norms and the logit lens still need the server engine.</p>
+
+  <p class="why">everything streams from forward hooks over
+     <code>ws://localhost:8765</code> (v1 protocol) — the same feed the
+     full <a href="/dashboard" target="_blank">dashboard</a> consumes.
+     clicking a mode card above switches the heatmap to it.</p>
+</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const log=$('log'),input=$('in'),stat=$('stat');
+$('base').value=location.protocol.startsWith('http')
+  ? location.origin+'/v1' : 'http://localhost:8080/v1';
+
+let msgs=[],busy=false,model='',engine='server';
+
+fetch($('base').value+'/models').then(r=>r.json()).then(d=>{
+  model=d.data?.[0]?.id||'';
+  if(engine==='server')stat.textContent=model||'no model listed';
+}).catch(()=>{if(engine==='server')
+  stat.textContent='api unreachable — is api_server.py running?';});
+
+// in-browser engine: curated HF models, weights streamed from huggingface.co,
+// inference over WebGPU via transformers.js (wasm fallback). chat only —
+// per-layer internals still need the hooked python server.
+let localGen=null,localGenId=null,localT=null,loadSeq=0;
+const localCache=new Map(),localTopos=new Map();  // id → pipeline / topology
+const loadwrap=$('loadwrap'),loadfill=$('loadfill'),loadtxt=$('loadtxt');
+function loadUI(state,txt){                 // 'ind' | number 0..100 | null
+  if(state===null){loadwrap.hidden=true;return;}
+  loadwrap.hidden=false;
+  loadwrap.classList.toggle('ind',state==='ind');
+  if(state==='ind')loadfill.style.width=''; // inline width beats the .ind rule
+  else if(typeof state==='number')
+    loadfill.style.width=state.toFixed(1)+'%';
+  loadtxt.textContent=txt;
+}
+$('engine').value='server';                 // undo browser form restoration
+$('engine').onchange=async ev=>{
+  engine=ev.target.value;
+  $('base').disabled=engine!=='server';
+  draw();                                   // update the viz notice
+  if(engine==='server'){
+    loadSeq++;loadUI(null);                 // abandon any in-flight load
+    stat.textContent=model||'';return;
+  }
+  await loadLocal(engine);
+};
+async function localTopology(id){           // honest layer structure
+  if(localTopos.has(id))return localTopos.get(id);
+  try{
+    const obs=id.startsWith('observable/'),
+          mid=obs?id.split('/')[1]:id;
+    const cfg=await(await fetch(obs
+      ?`/models/observable/${mid}/config.json`
+      :`https://huggingface.co/${id}/resolve/main/config.json`)).json();
+    const nL=cfg.num_hidden_layers||cfg.n_layer,
+          nH=cfg.num_attention_heads||cfg.n_head||0,
+          lt=cfg.layer_types||[];
+    if(!nL)return null;
+    const topo={type:'topology',
+      model:mid.split('/').pop()+(obs?' · observable':' · browser'),
+      layers:Array.from({length:nL},(_,i)=>({i,
+        attn:{kind:String(lt[i]||'').includes('conv')?'conv':'global',
+              heads:nH},
+        mlp:{kind:'dense',experts:0,topk:0}}))};
+    localTopos.set(id,topo);
+    return topo;
+  }catch(e){return null;}
+}
+async function loadLocal(id){
+  const seq=++loadSeq,obs=id.startsWith('observable/'),
+        mid=obs?id.split('/')[1]:id,short=mid.split('/').pop();
+  // stale or already-completed loads go silent (late progress events
+  // otherwise resurrect the bar after the model is active)
+  const live=()=>seq===loadSeq&&localGenId!==id;
+  try{
+    if(localCache.has(id)){                 // already loaded → instant switch
+      localGen=localCache.get(id);localGenId=id;
+      loadUI(null);
+      stat.textContent=`${short} · in-browser (cached)`+
+        (obs?' · observable':'');
+      localTopology(id);
+      return;
+    }
+    localGen=null;localGenId=null;
+    loadUI('ind',`${short} · loading transformers.js…`);
+    localT=localT||await import(
+      'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4.2');
+    if(!live())return;
+    if(obs){                                // observable exports live on our
+      localT.env.allowLocalModels=true;     // server, not the HF hub
+      localT.env.localModelPath=location.origin+'/models/observable/';
+    }
+    const dev=navigator.gpu?'webgpu':'wasm';
+    loadUI('ind',`${short} · fetching from `+
+      `${obs?'localhost (observable export)':'huggingface.co'} (${dev})…`);
+    const files=new Map();
+    const gen=await localT.pipeline('text-generation',mid,{
+      device:dev,dtype:dev==='webgpu'?'q4f16':'q4',
+      progress_callback:p=>{
+        if(!live()||p.status!=='progress'||!p.total)return;
+        files.set(p.file,{l:p.loaded,t:p.total});
+        let L=0,T2=0;
+        files.forEach(f=>{L+=f.l;T2+=f.t;});
+        const pct=T2?Math.min(100,100*L/T2):0;
+        loadUI(pct,`${short} · ${(L/1048576).toFixed(0)}/`+
+          `${(T2/1048576).toFixed(0)} MB · ${pct.toFixed(0)}%`);
+        if(pct>=100)loadUI('ind',`${short} · compiling for ${dev}…`);
+      }});
+    if(obs)gen.observable=await setupObservable(gen,mid);
+    localCache.set(id,gen);                 // keep even if user moved on
+    localTopology(id);
+    if(!live())return;
+    localGen=gen;localGenId=id;
+    loadUI(null);
+    stat.textContent=obs
+      ?`${short} · observable · in-browser ${dev} · resid norms + `+
+       'trajectory + predictions computed client-side'
+      :`${short} · in-browser ${dev} · `+
+       'tokens + predictions in the viz (full internals need the server)';
+  }catch(e){
+    if(!live())return;                      // an abandoned load, not an error
+    loadUI(null);
+    stat.textContent=`browser engine failed: ${e.message||e}`;
+    engine='server';$('engine').value='server';$('base').disabled=false;
+    draw();
+  }
+}
+// observable export: patch model.forward to read the hidden.* outputs the
+// graph surgery declared, and compute resid norms / 3D projection / top-k
+// in JS — the same stats server.py derives from its torch hooks.
+async function setupObservable(gen,mid){
+  const pb=await(await fetch(
+    `/models/observable/${mid}/proj_basis.json`)).json();
+  const st={pending:null,ctx:null,basis:pb.basis,H:pb.hidden};
+  const orig=gen.model.forward.bind(gen.model);
+  gen.model.forward=async inputs=>{
+    const out=await orig(inputs);
+    try{obsCapture(st,out,inputs,gen);}catch(e){}
+    return out;
+  };
+  return st;
+}
+function obsProj(d,off,H,B){                // hidden slice → [x,y,z] + norm²
+  let n2=0,px=0,py=0,pz=0;
+  for(let j=0;j<H;j++){
+    const v=d[off+j],b=B[j];
+    n2+=v*v;px+=v*b[0];py+=v*b[1];pz+=v*b[2];
+  }
+  return [n2,px,py,pz];
+}
+function obsCapture(st,out,inputs,gen){
+  const H=st.H,B=st.basis;
+  let nL=0;
+  while(out[`hidden.${nL}`])nL++;
+  if(!nL||!out.logits)return;
+  const S=out['hidden.0'].dims[1];
+  const layers=[],proj=[];
+  for(let i=0;i<nL;i++){
+    const [n2,px,py,pz]=obsProj(out[`hidden.${i}`].data,(S-1)*H,H,B);
+    layers.push({i,resid_norm:+Math.sqrt(n2).toFixed(4)});
+    proj.push([+px.toFixed(3),+py.toFixed(3),+pz.toFixed(3)]);
+  }
+  const lt=out.logits,V=lt.dims[2],ld=lt.data,lo=(lt.dims[1]-1)*V;
+  const top=[];
+  for(let v2=0;v2<V;v2++){
+    const val=ld[lo+v2];
+    if(top.length<5){top.push({i:v2,v:val});top.sort((a,b)=>b.v-a.v);}
+    else if(val>top[4].v){top[4]={i:v2,v:val};top.sort((a,b)=>b.v-a.v);}
+  }
+  let Z=0;
+  const mx2=top[0].v;
+  for(let v2=0;v2<V;v2++)Z+=Math.exp(ld[lo+v2]-mx2);
+  const topk=top.map(o=>[gen.tokenizer.decode([o.i]),
+                         +(Math.exp(o.v-mx2)/Z).toFixed(4)]);
+  if(S>1){                                  // prefill → full context trace
+    const ids=Array.from(inputs.input_ids.data,Number);
+    const cproj=[];
+    for(let p2=0;p2<S;p2++){
+      const row=[];
+      for(let i=0;i<nL;i++){
+        const [,px,py,pz]=obsProj(out[`hidden.${i}`].data,p2*H,H,B);
+        row.push([+px.toFixed(3),+py.toFixed(3),+pz.toFixed(3)]);
+      }
+      cproj.push(row);
+    }
+    st.ctx={type:'context',proj:cproj,
+            tokens:ids.map(x=>gen.tokenizer.decode([x]))};
+  }
+  st.pending={layers,proj,topk};
+}
+let lastTopk=null,localFrameT=0;
+function mkTopkList(){                      // tap real top-5 from the logits
+  try{
+    const list=new localT.LogitsProcessorList();
+    const tok=localGen.tokenizer;
+    class TopkTap extends localT.LogitsProcessor{
+      _call(_ids,logits){
+        try{
+          const d=logits.data,V=d.length,top=[];
+          for(let i=0;i<V;i++){
+            const v=d[i];
+            if(top.length<5){top.push({i,v});top.sort((a,b)=>b.v-a.v);}
+            else if(v>top[4].v){top[4]={i,v};top.sort((a,b)=>b.v-a.v);}
+          }
+          let Z=0;const m=top[0].v;
+          for(let i=0;i<V;i++)Z+=Math.exp(d[i]-m);
+          lastTopk=top.map(o=>[tok.decode([o.i]),
+                               +(Math.exp(o.v-m)/Z).toFixed(4)]);
+        }catch(e){}
+        return logits;
+      }
+    }
+    list.push(new TopkTap());
+    return list;
+  }catch(e){return null;}
+}
+
+// ═══════════════ background viz — live layers × tokens heatmap ═════════════
+const viz={
+  topo:null, frames:[], bounds:new Set(),   // frame indices where a run starts
+  rowMax:{},                                // metric → per-layer running max
+  offset:-1, follow:true,                   // rightmost visible frame index
+  metric:0, cap:1024,
+};
+const METRICS=[['mlp','mlp_norm'],['attn','attn_norm'],['resid','resid_norm'],
+               ['embed',null]];             // embed = trajectory view, no key
+const embedMode=()=>!METRICS[viz.metric][1];
+function availableMetrics(){                // which modes have data right now
+  const av=new Set();
+  for(const f of viz.frames){
+    const L=f.layers?.[0];
+    if(L){
+      if(L.mlp_norm!==undefined)av.add(0);
+      if(L.attn_norm!==undefined)av.add(1);
+      if(L.resid_norm!==undefined)av.add(2);
+    }
+    if(f.proj)av.add(3);
+    if(av.size===4)break;
+  }
+  if(viz.ctx?.proj)av.add(3);
+  if(!av.size)av.add(0);                    // nothing yet → default heatmap
+  return av;
+}
+const emb={yaw:.7,pitch:.35,dim:3,layer:null,screen:[],cscreen:[],mmap:[],
+           labels:'auto',ctx:true,zoom:1};
+const cv=$('viz'),ctx=cv.getContext('2d');
+const CW=13,RAIL=40,PAD=8;                  // cell width, left rail, v-padding
+
+function kindGlyph(l){
+  const k=l.attn.kind;
+  return k==='conv'?'C':k==='ssm'?'S':(k==='global'||k==='attn')?'A':'a';
+}
+function mix(a,b,w){                        // hex colors → css rgb
+  const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),
+              parseInt(h.slice(5,7),16)];
+  const x=p(a),y=p(b);
+  return `rgb(${x.map((v,i)=>Math.round(v+(y[i]-v)*w)).join(',')})`;
+}
+function heat(w){                           // 0..1 → paper → amber → red
+  if(w<=0)return '#E6EAEE';
+  return w<.55 ? mix('#EDF0F3','#E39B2D',w/.55)
+               : mix('#E39B2D','#B02E3C',(w-.55)/.45);
+}
+function sameShape(a,b){
+  return a&&b&&a.layers.length===b.layers.length&&
+    a.layers.every((l,i)=>l.attn.kind===b.layers[i].attn.kind);
+}
+function onProto(m){
+  if(m.type==='topology'){
+    if(!sameShape(viz.topo,m)){             // new/changed model → hard reset
+      viz.topo=m;viz.frames=[];viz.bounds=new Set();viz.rowMax={};
+      viz.offset=-1;viz.follow=true;viz.ctx=null;
+      if(sel)closePanel();
+    }else if(viz.frames.length){            // same model → run boundary
+      viz.bounds.add(viz.frames.length);
+      viz.follow=true;viz.offset=viz.frames.length-1;   // snap to live
+    }
+  }else if(m.type==='context'){             // full prompt trace (prefill)
+    viz.ctx=m;
+  }else if(m.type==='token'&&viz.topo){
+    viz.frames.push(m);
+    for(const[name,key]of METRICS){
+      if(!key)continue;                     // embed mode has no norm key
+      const mx=viz.rowMax[name]||(viz.rowMax[name]=
+        new Array(viz.topo.layers.length).fill(1e-9));
+      m.layers.forEach((L,i)=>{if(L[key]>mx[i])mx[i]=L[key];});
+    }
+    if(viz.frames.length>viz.cap){          // trim history, shift indices
+      viz.frames.shift();
+      viz.bounds=new Set([...viz.bounds].map(b=>b-1).filter(b=>b>0));
+      if(!viz.follow)viz.offset--;
+      if(sel&&--sel.fi<0)closePanel();
+    }
+    if(viz.follow)viz.offset=viz.frames.length-1;
+    const av=availableMetrics();            // run without data for this mode
+    if(!av.has(viz.metric)){                // → snap to something visible
+      viz.metric=[...av].sort()[0];
+      $('metric').textContent='viz: '+METRICS[viz.metric][0];
+      if(!explain.hidden)syncExplain();
+    }
+    if(sel)renderPanel();                   // keep the cut-out live
+  }
+  draw();
+}
+let ws=null;
+function wsConnect(){
+  let url;
+  if(location.protocol==='https:'){         // deployed: single-port /ws
+    url=`wss://${location.host}/ws`;
+  }else{                                    // local: dedicated :8765
+    let host='localhost';
+    try{host=new URL($('base').value).hostname||'localhost';}catch(e){}
+    url=`ws://${host}:8765`;
+  }
+  ws=new WebSocket(url);
+  ws.onopen=()=>{$('vstat').textContent='viz ●';draw();};
+  ws.onmessage=ev=>onProto(JSON.parse(ev.data));
+  ws.onclose=()=>{$('vstat').textContent='viz ○';setTimeout(wsConnect,3000);};
+  ws.onerror=()=>ws.close();
+}
+wsConnect();
+
+function geometry(){                        // heatmap sits between the glass bars
+  const w=cv.clientWidth,h=cv.clientHeight;
+  const hint=document.querySelector('.hint'),foot=document.querySelector('footer');
+  const top=(hint?hint.getBoundingClientRect().bottom:0)+PAD;
+  const bot=(foot?foot.getBoundingClientRect().top:h)-PAD;
+  const tk=56;                              // predicted-token strip height
+  const n=viz.topo?viz.topo.layers.length:0;
+  const rt=top+tk;                          // rows start below the strip
+  const rh=n?Math.max(4,(bot-rt)/n):0;
+  const cols=Math.max(1,Math.floor((w-RAIL-PAD)/CW));
+  const first=Math.max(0,viz.offset-cols+1);
+  return {w,h,n,rh,cols,first,top,bot,tk,rt};
+}
+function draw(){
+  const dpr=window.devicePixelRatio||1;
+  const w=cv.clientWidth,h=cv.clientHeight;
+  if(cv.width!==w*dpr||cv.height!==h*dpr){
+    cv.width=w*dpr;cv.height=h*dpr;
+  }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  if(!viz.topo)return;
+  const g=geometry(),mx=viz.rowMax[METRICS[viz.metric][0]]||[];
+  const key=METRICS[viz.metric][1];
+  ctx.font='9px ui-monospace,Menlo,monospace';
+  if(!key){drawEmbed(g);return;}            // embed → trajectory view
+  // left rail: layer label + kind glyph
+  const step=Math.max(1,Math.ceil(11/g.rh));
+  for(let i=0;i<g.n;i++){
+    if(i%step)continue;
+    const y=g.rt+i*g.rh+g.rh/2+3;
+    ctx.fillStyle='#6B7A8C';
+    ctx.fillText(`L${String(i).padStart(2,'0')}`,4,y);
+    ctx.fillStyle=kindGlyph(viz.topo.layers[i])==='C'?'#8B98A7':'#B02E3C';
+    ctx.fillText(kindGlyph(viz.topo.layers[i]),28,y);
+  }
+  ctx.fillStyle='#6B7A8C';
+  ctx.fillText('tok',4,g.top+g.tk/2+3);
+  // predicted-token strip + cells
+  for(let c=0;c<g.cols;c++){
+    const f=viz.frames[g.first+c];
+    if(!f)break;
+    const x=RAIL+c*CW;
+    ctx.save();                             // rotated token text, clipped
+    ctx.beginPath();ctx.rect(x,g.top,CW,g.tk-3);ctx.clip();
+    ctx.translate(x+CW/2+3,g.top+g.tk-6);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=f.eos?'#B02E3C':'rgba(34,52,74,.75)';
+    ctx.fillText(tokLabel(f.text),0,0);
+    ctx.restore();
+    for(let i=0;i<g.n;i++){
+      const d=f.layers[i],v=d?.[key]??0;
+      const cy=g.rt+i*g.rh,ch=Math.max(1,g.rh-1);
+      ctx.fillStyle=heat(mx[i]?v/mx[i]:0);
+      ctx.fillRect(x,cy,CW-1,ch);        // solid cell = aggregate (and frame)
+      // attn mode: subdivide attention cells into per-head panels; the
+      // 2px frame left showing carries the aggregate attn norm
+      if(key==='attn_norm'&&d?.head_norms?.length&&g.rh>=10){
+        const F=2,iw=CW-1-2*F,ih=ch-2*F;
+        if(iw>=4&&ih>=8){
+          const heads=d.head_norms,cols=2,
+                rows=Math.ceil(heads.length/cols),
+                hm=Math.max(...heads,1e-9),
+                sw=iw/cols,sh=ih/rows;
+          for(let hh=0;hh<heads.length;hh++){
+            ctx.fillStyle=heat(heads[hh]/hm);   // per-cell head fingerprint
+            ctx.fillRect(x+F+(hh%cols)*sw,
+                         cy+F+Math.floor(hh/cols)*sh,
+                         Math.max(1,sw-.6),Math.max(1,sh-.5));
+          }
+        }
+      }
+      // logit-lens flip marker: prediction changed at this layer
+      if(f.lens&&i>0&&f.lens[i]&&f.lens[i][0]!==f.lens[i-1][0]){
+        const settle=f.lens[i][0]===f.text;
+        ctx.beginPath();
+        ctx.arc(x+CW-5,g.rt+i*g.rh+4,1.8,0,7);
+        ctx.fillStyle=settle?'#B02E3C':'#FFFFFF';
+        ctx.fill();
+        ctx.strokeStyle=settle?'#FFFFFF':'#22344A';
+        ctx.stroke();
+      }
+    }
+    if(f.eos){                              // eos column: ink cap
+      ctx.fillStyle='#22344A';
+      ctx.fillRect(x,g.top-4,CW-1,2);
+    }
+  }
+  // run boundaries
+  ctx.strokeStyle='#22344A';ctx.lineWidth=1;ctx.setLineDash([2,3]);
+  for(const b of viz.bounds){
+    if(b<=g.first||b>g.first+g.cols)continue;
+    const x=RAIL+(b-g.first)*CW-.5;
+    ctx.beginPath();ctx.moveTo(x,g.top);ctx.lineTo(x,g.bot);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // hover crosshair (column always; row only for cell hover)
+  if(hover&&hover.c!==undefined){
+    ctx.strokeStyle='rgba(34,52,74,.55)';
+    ctx.strokeRect(RAIL+hover.c*CW-.5,g.top-.5,CW,g.bot-g.top+1);
+    if(hover.i!==null)
+      ctx.strokeRect(RAIL-.5,g.rt+hover.i*g.rh-.5,g.cols*CW+1,g.rh);
+  }
+  // selected cell (open panel)
+  if(sel&&sel.fi>=g.first&&sel.fi<g.first+g.cols){
+    const x=RAIL+(sel.fi-g.first)*CW;
+    ctx.strokeStyle='#B02E3C';ctx.lineWidth=2;
+    if(sel.i===null)ctx.strokeRect(x-1,g.top-1,CW+1,g.tk-1);
+    else ctx.strokeRect(x-1,g.rt+sel.i*g.rh-1,CW+1,g.rh+1);
+    ctx.lineWidth=1;
+    // attention arcs: where the selected token looked (mean over heads)
+    const d=viz.frames[sel.fi]?.layers?.[sel.i];
+    if(d?.attn_srcs){
+      const x0=x+CW/2,y0=g.top+g.tk-4;
+      let ctxW=0;
+      ctx.lineWidth=1.3;
+      for(const[p,w]of d.attn_srcs){
+        const L2=posLabel(sel.fi,p);
+        if(L2.col===null||L2.col<g.first||L2.col>=g.first+g.cols){
+          ctxW+=w;continue;                 // off-strip → context aggregate
+        }
+        const x1=RAIL+(L2.col-g.first)*CW+CW/2;
+        ctx.strokeStyle=`rgba(176,46,60,${Math.min(.9,.15+w*2).toFixed(2)})`;
+        ctx.beginPath();ctx.moveTo(x0,y0);
+        ctx.quadraticCurveTo((x0+x1)/2,g.top+4,x1,y0);
+        ctx.stroke();
+      }
+      ctx.lineWidth=1;
+      if(ctxW>.001){
+        ctx.fillStyle='#3E7CA8';
+        ctx.font='9px ui-monospace,Menlo,monospace';
+        ctx.fillText(`◂ context ${(ctxW*100).toFixed(0)}%`,
+                     Math.max(4,x0-92),g.top+8);
+        ctx.font='9px ui-monospace,Menlo,monospace';
+      }
+    }
+  }
+  // status tags
+  ctx.font='10px ui-monospace,Menlo,monospace';
+  if(engine!=='server'){
+    const obsRun=viz.frames.some(f=>f.layers?.length);
+    ctx.fillStyle=obsRun?'#3E7CA8':'#B02E3C';
+    ctx.fillText(obsRun
+      ?'observable in-browser model: resid norms + trajectory + predictions '+
+       'computed client-side (try viz: resid / embed) · mlp/attn/heads/lens '+
+       'still need the server'
+      :'browser engine: real tokens + top-k predictions, but no layer '+
+       'internals (cells stay pale) — switch to "server api" or the '+
+       'observable model for more',RAIL,g.bot-4);
+  }else{
+    ctx.fillStyle='#6B7A8C';
+    if(!viz.frames.length){
+      ctx.fillText('send a message — internals stream in live',RAIL,g.bot-4);
+    }else if(!viz.follow){
+      ctx.fillText('◂ history · drag right to resume live',RAIL,g.bot-4);
+    }
+  }
+}
+
+// embed mode: residual trajectory in a fixed random 3D basis
+const CTXC='#3E7CA8';                       // context trace: steel blue
+function embLayerPts(L){                    // gen + context points for a layer
+  const pts=[];
+  viz.frames.forEach((f,idx)=>{if(f.proj?.[L])pts.push({p:f.proj[L],idx,f});});
+  const cpts=[];
+  if(emb.ctx&&viz.ctx?.proj)
+    viz.ctx.proj.forEach((pl,pi)=>{
+      if(pl?.[L])cpts.push({p:pl[L],tok:viz.ctx.tokens?.[pi]??'',pi});
+    });
+  return {pts,cpts};
+}
+function drawEmbed(g){
+  const n=g.n,L=emb.layer??n-1;
+  const MM=n?64:0;                          // layer-minimap column width
+  ctx.font='10px ui-monospace,Menlo,monospace';
+  ctx.fillStyle='#6B7A8C';
+  ctx.fillText(`embedding trajectory · L${String(L).padStart(2,'0')} residual `+
+    `→ fixed random ${emb.dim}d projection · zoom ${emb.zoom.toFixed(1)}×`,
+    RAIL,g.top+4);
+  ctx.fillText('drag rotates · wheel/pinch zooms · ↑/↓ or minimap picks '+
+    `layer · d 2d/3d · t labels (${emb.labels}) · c context · `+
+    'click a point → cut-out',RAIL,g.bot-4);
+  const {pts,cpts}=embLayerPts(L);
+  emb.screen=[];emb.cscreen=[];emb.mmap=[];
+  if(!pts.length&&!cpts.length){
+    if(engine!=='server'){
+      ctx.fillStyle='#B02E3C';
+      ctx.fillText('browser runs expose no hidden states — the trajectory '+
+        'needs the server engine (heatmap mode shows tokens + predictions)',
+        RAIL,g.top+20);
+    }else ctx.fillText('no projection data yet — send a message',
+      RAIL,g.top+20);
+    return;
+  }
+  const cyw=Math.cos(emb.yaw),syw=Math.sin(emb.yaw),
+        cpt=Math.cos(emb.pitch),spt=Math.sin(emb.pitch);
+  const rot3=(x,y,z)=>{                     // yaw about y, then pitch about x
+    const x1=x*cyw+z*syw,z1=-x*syw+z*cyw;
+    return [x1,y*cpt-z1*spt,y*spt+z1*cpt];
+  };
+  const R=o=>{
+    const[X,Y]=emb.dim===3?rot3(...o.p):[o.p[0],o.p[1],0];
+    return {...o,X,Y};
+  };
+  const rot=pts.map(R),crot=cpts.map(R);
+  const all=rot.concat(crot);
+  const xs=all.map(r=>r.X),ys=all.map(r=>r.Y);
+  const mnx=Math.min(...xs),mxx=Math.max(...xs),
+        mny=Math.min(...ys),mxy=Math.max(...ys);
+  const pad=40,w0=g.w-RAIL-MM-2*pad,h0=g.bot-g.top-2*pad-24;
+  const s=Math.min(w0/Math.max(1e-6,mxx-mnx),
+                   h0/Math.max(1e-6,mxy-mny))*emb.zoom;
+  const cx0=(mnx+mxx)/2,cy0=(mny+mxy)/2;    // zoom about the cloud center
+  const ox=RAIL+pad+w0/2,oy=g.top+pad+16+h0/2;
+  const S=r=>({x:ox+s*(r.X-cx0),y:oy+s*(r.Y-cy0)});
+  emb.screen=rot.map(r=>({...S(r),idx:r.idx,f:r.f}));
+  emb.cscreen=crot.map(r=>({...S(r),tok:r.tok,pi:r.pi}));
+  ctx.save();                               // clip the plot off the minimap
+  ctx.beginPath();ctx.rect(0,g.top+10,g.w-MM-4,g.bot-g.top-22);ctx.clip();
+  if(emb.cscreen.length){                   // context trace beneath, in blue
+    ctx.strokeStyle=CTXC;ctx.lineWidth=.9;ctx.setLineDash([1,3]);
+    ctx.beginPath();
+    emb.cscreen.forEach((q,k)=>k?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));
+    if(emb.screen.length){                  // last context state feeds t=0
+      const b=emb.screen[0];ctx.lineTo(b.x,b.y);
+    }
+    ctx.stroke();ctx.setLineDash([]);
+    emb.cscreen.forEach(q=>{
+      ctx.beginPath();ctx.arc(q.x,q.y,1.7,0,7);
+      ctx.fillStyle='#EEF1F4';ctx.fill();
+      ctx.strokeStyle=CTXC;ctx.stroke();
+    });
+    ctx.lineWidth=1;
+  }
+  // path, colored old → new; hops between runs dashed
+  for(let k=1;k<emb.screen.length;k++){
+    const a=emb.screen[k-1],b=emb.screen[k],
+          rec=k/(emb.screen.length-1);
+    ctx.strokeStyle=heat(.15+.85*rec);
+    ctx.lineWidth=.8+1.2*rec;
+    if(viz.bounds.has(b.idx))ctx.setLineDash([2,3]);
+    ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    ctx.setLineDash([]);
+  }
+  ctx.lineWidth=1;
+  emb.screen.forEach((q,k)=>{               // token points
+    const rec=k/Math.max(1,emb.screen.length-1);
+    ctx.beginPath();ctx.arc(q.x,q.y,q.f.eos?3.2:2.2,0,7);
+    ctx.fillStyle=q.f.eos?'#B02E3C':heat(.15+.85*rec);
+    ctx.fill();
+    if(q.idx===0||viz.bounds.has(q.idx)){   // run starts ringed in ink
+      ctx.strokeStyle='#22344A';ctx.stroke();
+    }
+  });
+  // labels · 'auto' = hide colliding ones, recent tokens win · 'all' · 'off'
+  const placed=[];
+  const fits=(x,y,w)=>{
+    if(emb.labels==='all')return true;
+    for(const b of placed)
+      if(Math.abs(b.x-(x+w/2))<(b.w+w)/2&&Math.abs(b.y-y)<9)return false;
+    placed.push({x:x+w/2,y,w});
+    return true;
+  };
+  const last=emb.screen[emb.screen.length-1];
+  if(last){                                 // latest: bold ring, always labeled
+    ctx.beginPath();ctx.arc(last.x,last.y,4.5,0,7);
+    ctx.strokeStyle='#22344A';ctx.lineWidth=1.5;ctx.stroke();ctx.lineWidth=1;
+    ctx.fillStyle='#22344A';
+    const lt=tokLabel(last.f.text);
+    ctx.fillText(lt,Math.min(last.x+7,g.w-MM-70),last.y+3);
+    placed.push({x:last.x+7+lt.length*3,y:last.y+3,w:lt.length*6+6});
+  }
+  if(emb.labels!=='off'){
+    ctx.font='8px ui-monospace,Menlo,monospace';
+    for(let k=emb.screen.length-2;k>=0;k--){  // newest first = priority
+      const q=emb.screen[k],lt=tokLabel(q.f.text),w=lt.length*4.6+4;
+      if(!fits(q.x+5,q.y+3,w))continue;
+      const rec=k/Math.max(1,emb.screen.length-1);
+      ctx.fillStyle=q.f.eos?'#B02E3C':
+        `rgba(34,52,74,${(.3+.55*rec).toFixed(2)})`;
+      ctx.fillText(lt,q.x+5,q.y+3);
+    }
+    ctx.fillStyle='rgba(62,124,168,.8)';    // context labels: lowest priority
+    for(const q of emb.cscreen){
+      const lt=tokLabel(q.tok),w=lt.length*4.6+4;
+      if(fits(q.x+4,q.y+3,w))ctx.fillText(lt,q.x+4,q.y+3);
+    }
+    ctx.font='10px ui-monospace,Menlo,monospace';
+  }
+  if(sel){                                  // selected token ring
+    const q=emb.screen.find(q=>q.idx===sel.fi);
+    if(q){ctx.beginPath();ctx.arc(q.x,q.y,6,0,7);
+          ctx.strokeStyle='#B02E3C';ctx.lineWidth=2;ctx.stroke();ctx.lineWidth=1;}
+  }
+  if(hover?.emb!==undefined&&emb.screen[hover.emb]){
+    const q=emb.screen[hover.emb];
+    ctx.beginPath();ctx.arc(q.x,q.y,5,0,7);
+    ctx.strokeStyle='rgba(34,52,74,.7)';ctx.stroke();
+  }
+  ctx.restore();                            // end plot clip
+  // layer minimap: every layer's trajectory as a thumb, click to view
+  if(MM){
+    const mx0=g.w-MM+4,mw=MM-10,
+          mh=Math.max(16,(g.bot-g.top-10)/n);
+    ctx.font='7px ui-monospace,Menlo,monospace';
+    for(let i=0;i<n;i++){
+      const my=g.top+4+i*mh;
+      emb.mmap.push({x:mx0,y:my,w:mw,h:mh-3,layer:i});
+      ctx.fillStyle=i===L?'rgba(176,46,60,.08)':'rgba(255,255,255,.6)';
+      ctx.fillRect(mx0,my,mw,mh-3);
+      ctx.strokeStyle=i===L?'#B02E3C':'#C9D2DB';
+      ctx.lineWidth=i===L?1.5:1;
+      ctx.strokeRect(mx0+.5,my+.5,mw-1,mh-4);
+      ctx.lineWidth=1;
+      const lp=embLayerPts(i),lr=lp.pts.map(R),lc=lp.cpts.map(R);
+      const la=lr.concat(lc);
+      if(la.length>1){
+        const lxs=la.map(r=>r.X),lys=la.map(r=>r.Y);
+        const a1=Math.min(...lxs),a2=Math.max(...lxs),
+              b1=Math.min(...lys),b2=Math.max(...lys);
+        const ls=Math.min((mw-6)/Math.max(1e-6,a2-a1),
+                          (mh-9)/Math.max(1e-6,b2-b1));
+        const lox=mx0+3+((mw-6)-ls*(a2-a1))/2,
+              loy=my+3+((mh-9)-ls*(b2-b1))/2;
+        const line=(arr,style)=>{
+          if(arr.length<2)return;
+          ctx.strokeStyle=style;ctx.beginPath();
+          arr.forEach((r,k)=>{
+            const x=lox+ls*(r.X-a1),y=loy+ls*(r.Y-b1);
+            k?ctx.lineTo(x,y):ctx.moveTo(x,y);
+          });
+          ctx.stroke();
+        };
+        line(lc,'rgba(62,124,168,.55)');
+        line(lr,i===L?'#B02E3C':'rgba(227,155,45,.9)');
+      }
+      if(mh>=13){
+        ctx.fillStyle=i===L?'#B02E3C':'#8B98A7';
+        ctx.fillText('L'+String(i).padStart(2,'0'),mx0+2,my+8);
+      }
+    }
+    ctx.font='10px ui-monospace,Menlo,monospace';
+  }
+  if(emb.dim===3){                          // axis tripod
+    const ax0=g.w-MM-34,ay0=g.bot-40;
+    for(const[vx,vy,vz,lb]of[[1,0,0,'x'],[0,1,0,'y'],[0,0,1,'z']]){
+      const[X,Y]=rot3(vx,vy,vz);
+      ctx.strokeStyle='#8B98A7';
+      ctx.beginPath();ctx.moveTo(ax0,ay0);ctx.lineTo(ax0+X*13,ay0+Y*13);ctx.stroke();
+      ctx.fillStyle='#8B98A7';ctx.fillText(lb,ax0+X*19-2,ay0+Y*19+3);
+    }
+  }
+}
+
+// interactions: hover inspect · click cycle metric · drag pan
+let hover=null,drag=null;
+const tip=$('tip');
+function tokLabel(t){
+  return t.replace(/\n/g,'↵').replace(/^ /,'').slice(0,14)||'·';
+}
+function posLabel(fi,pos){                  // absolute attn position → token
+  const ctxLen=viz.ctx?.tokens?.length??0;
+  if(pos<ctxLen&&viz.ctx)
+    return {text:viz.ctx.tokens[pos],ctx:true,col:null};
+  let rs=0;                                 // this frame's run start
+  viz.bounds.forEach(b=>{if(b<=fi&&b>rs)rs=b;});
+  const gi=rs+(pos-ctxLen),f=viz.frames[gi];
+  return f&&gi<=fi?{text:f.text,ctx:false,col:gi}
+                  :{text:`pos${pos}`,ctx:false,col:null};
+}
+function cellAt(ev){
+  const g=geometry();
+  if(!viz.topo||!viz.frames.length)return null;
+  const c=Math.floor((ev.clientX-RAIL)/CW);
+  if(c<0||g.first+c>=viz.frames.length)return null;
+  const fi=g.first+c,f=viz.frames[fi];
+  if(ev.clientY>=g.top&&ev.clientY<g.rt)   // token strip → token-level hover
+    return {c,i:null,f,fi};
+  const i=Math.floor((ev.clientY-g.rt)/g.rh);
+  if(i<0||i>=g.n)return null;
+  return {c,i,f,fi};
+}
+function embedPointAt(ev){                  // nearest gen/ctx point ≤9px
+  let best=null,bd=81;
+  (emb.screen||[]).forEach((q,k)=>{
+    const d2=(q.x-ev.clientX)**2+(q.y-ev.clientY)**2;
+    if(d2<bd){bd=d2;best={kind:'gen',k};}
+  });
+  (emb.cscreen||[]).forEach((q,k)=>{
+    const d2=(q.x-ev.clientX)**2+(q.y-ev.clientY)**2;
+    if(d2<bd){bd=d2;best={kind:'ctx',k};}
+  });
+  return best;
+}
+function moveDrag(x,y){                     // shared: mouse + touch
+  if(embedMode()){                          // embed drag = rotate
+    const dx=x-drag.x,dy=y-(drag.y??y);
+    if(Math.abs(dx)+Math.abs(dy)>1)drag.moved=true;
+    emb.yaw+=dx*.01;
+    emb.pitch=Math.max(-1.45,Math.min(1.45,emb.pitch+dy*.01));
+    drag.x=x;drag.y=y;
+    draw();return;
+  }
+  const d=Math.round((drag.x-x)/CW);        // heatmap drag = pan history
+  if(d){
+    drag.moved=true;drag.x=x;
+    viz.offset=Math.min(viz.frames.length-1,Math.max(0,viz.offset+d));
+    viz.follow=viz.offset>=viz.frames.length-1;
+    draw();
+  }
+}
+cv.addEventListener('mousemove',ev=>{
+  if(drag){moveDrag(ev.clientX,ev.clientY);return;}
+  if(embedMode()){                          // hover = nearest token point
+    const hit=embedPointAt(ev);
+    hover=hit&&hit.kind==='gen'?{emb:hit.k}:null;
+    if(hit){
+      const t1=document.createElement('div');t1.className='t1';
+      const t2=document.createElement('div');t2.className='t2';
+      const L=emb.layer??viz.topo.layers.length-1;
+      if(hit.kind==='gen'){
+        const F=emb.screen[hit.k].f;
+        t1.textContent=`t=${F.t} ${JSON.stringify(F.text)}`+(F.eos?' · eos':'');
+        t2.textContent=`L${String(L).padStart(2,'0')} resid → `+
+          `[${F.proj[L].map(v=>v.toFixed(1)).join(', ')}]`+
+          ` · resid norm ${F.layers[L]?.resid_norm}`;
+      }else{
+        const q=emb.cscreen[hit.k];
+        t1.textContent=`context[${q.pi}] ${JSON.stringify(q.tok)}`;
+        t2.textContent=`prompt/context token · L${String(L).padStart(2,'0')} `+
+          `prefill state — feeds generation, no per-token frame`;
+      }
+      tip.style.display='block';
+      tip.replaceChildren(t1,t2);
+      tip.style.left=Math.min(ev.clientX+14,window.innerWidth-290)+'px';
+      tip.style.top=Math.min(ev.clientY+14,window.innerHeight-72)+'px';
+    }else tip.style.display='none';
+    draw();return;
+  }
+  hover=cellAt(ev);
+  if(hover){
+    const F=hover.f,rows=[];
+    const t1=document.createElement('div');t1.className='t1';
+    if(hover.i===null){                     // token strip: prediction detail
+      t1.textContent=`t=${F.t} ${JSON.stringify(F.text)}`+(F.eos?' · eos':'');
+      rows.push(t1);
+      if(F.entropy!==undefined){            // uncertainty at this step
+        const tu=document.createElement('div');tu.className='t2';
+        tu.textContent=`entropy ${F.entropy} bits · `+
+          `top-1 margin ${(F.margin*100).toFixed(1)}%`;
+        rows.push(tu);
+      }
+    }else{
+      const L=viz.topo.layers[hover.i],d=F.layers[hover.i];
+      t1.textContent=`L${String(hover.i).padStart(2,'0')} ${kindGlyph(L)} `+
+        `${L.attn.kind} · t=${F.t} ${JSON.stringify(F.text)}`;
+      const t2=document.createElement('div');t2.className='t2';
+      if(!d){                               // browser run: no layer internals
+        t2.textContent='no internals — in-browser run '+
+          '(tokens + predictions only)';
+        rows.push(t1,t2);
+        if(F.topk){
+          const t3=document.createElement('div');t3.className='t2';
+          t3.textContent='predicted: '+F.topk.map(([w,p])=>
+            `${JSON.stringify(w)} ${(p*100).toFixed(p>=.1?0:1)}%`).join(' · ');
+          rows.push(t3);
+        }
+        tip.style.display='block';
+        tip.replaceChildren(...rows);
+        tip.style.left=Math.min(ev.clientX+14,window.innerWidth-290)+'px';
+        tip.style.top=Math.min(ev.clientY+14,window.innerHeight-72)+'px';
+        draw();return;
+      }
+      t2.textContent=[['mlp',d.mlp_norm],['attn',d.attn_norm],
+                      ['resid',d.resid_norm]]
+        .filter(([,v])=>v!==undefined).map(([k,v])=>`${k} ${v}`).join(' · ')+
+        (d.head_norms?.length?` · ${d.head_norms.length} heads (max ${
+          Math.max(...d.head_norms).toFixed(2)})`:'')+
+        (d.expert_weights?` · experts ${d.expert_weights.map(e=>e[0]).join(',')}`:'')+
+        (F.eos?' · eos':'');
+      rows.push(t1,t2);
+      if(F.lens&&F.lens[hover.i]){            // logit lens at this depth
+        const[lw,lp]=F.lens[hover.i],
+              prev=hover.i>0?F.lens[hover.i-1]:null;
+        const tl=document.createElement('div');tl.className='t2';
+        let s=`lens: ${JSON.stringify(lw)} ${(lp*100).toFixed(0)}%`;
+        if(prev&&prev[0]!==lw)s+=` · changed here (was ${JSON.stringify(prev[0])})`;
+        if(lw===F.text&&prev&&prev[0]!==lw)s+=' → settles on final';
+        tl.textContent=s;
+        rows.push(tl);
+      }
+      if(d.attn_srcs){                      // where this token looked
+        const ta=document.createElement('div');ta.className='t2';
+        ta.textContent='looks at: '+d.attn_srcs.slice(0,4).map(([p,w])=>{
+          const L2=posLabel(hover.fi,p);
+          return `${L2.ctx?'ctx ':''}${JSON.stringify(L2.text)} `+
+                 `${(w*100).toFixed(0)}%`;
+        }).join(' · ')+(d.attn_entropy!==undefined
+          ?` · spread ${(d.attn_entropy*100).toFixed(0)}%`:'');
+        rows.push(ta);
+      }
+      // attn mode: resolve the head sub-panel under the cursor
+      if(METRICS[viz.metric][1]==='attn_norm'&&d.head_norms?.length){
+        const g=geometry(),FR=2,
+              lx=ev.clientX-(RAIL+hover.c*CW)-FR,
+              ly=ev.clientY-(g.rt+hover.i*g.rh)-FR,
+              iw=CW-1-2*FR,ih=Math.max(1,g.rh-1)-2*FR;
+        if(lx>=0&&ly>=0&&lx<iw&&ly<ih){
+          const cols=2,rws=Math.ceil(d.head_norms.length/cols),
+                hh=Math.floor(ly/(ih/rws))*cols+Math.floor(lx/(iw/cols));
+          if(hh<d.head_norms.length){
+            const th=document.createElement('div');th.className='t2';
+            th.textContent=`↳ head h${hh}: ${d.head_norms[hh]} `+
+              `(cell max ${Math.max(...d.head_norms).toFixed(2)})`;
+            rows.push(th);
+          }
+        }
+      }
+    }
+    if(F.topk){                             // model's top-k predictions
+      const t3=document.createElement('div');t3.className='t2';
+      t3.textContent='predicted: '+F.topk.map(([w,p])=>
+        `${JSON.stringify(w)} ${(p*100).toFixed(p>=.1?0:1)}%`).join(' · ');
+      rows.push(t3);
+    }
+    tip.style.display='block';
+    tip.replaceChildren(...rows);
+    tip.style.left=Math.min(ev.clientX+14,window.innerWidth-290)+'px';
+    tip.style.top=Math.min(ev.clientY+14,window.innerHeight-72)+'px';
+  }else tip.style.display='none';
+  draw();
+});
+cv.addEventListener('mouseleave',()=>{hover=null;tip.style.display='none';draw();});
+cv.addEventListener('mousedown',ev=>{
+  drag={x:ev.clientX,y:ev.clientY,moved:false};
+});
+function clickAt(ev){                       // shared: mouse click + tap
+  if(embedMode()){
+    const mm=(emb.mmap||[]).find(m=>       // minimap thumb → switch layer
+      ev.clientX>=m.x&&ev.clientX<=m.x+m.w&&
+      ev.clientY>=m.y&&ev.clientY<=m.y+m.h);
+    if(mm){emb.layer=mm.layer;draw();return;}
+    const hit=embedPointAt(ev);             // point → cut-out for token
+    if(hit&&hit.kind==='gen'){
+      sel={fi:emb.screen[hit.k].idx,
+           i:emb.layer??viz.topo.layers.length-1};
+      panelPos={x:ev.clientX,y:ev.clientY};
+      renderPanel();draw();
+    }else if(!hit)cycleMetric();            // ctx points: tooltip only
+    return;
+  }
+  const cell=cellAt(ev);                    // cell click → dashboard cut-out
+  if(cell){sel={fi:cell.fi,i:cell.i};panelPos={x:ev.clientX,y:ev.clientY};
+           renderPanel();draw();}
+  else cycleMetric();
+}
+window.addEventListener('mouseup',ev=>{
+  if(!drag)return;
+  const moved=drag.moved;drag=null;
+  if(!moved)clickAt(ev);
+});
+let pinch=null;                             // touch: rotate/pan, pinch-zoom, tap
+cv.addEventListener('touchstart',ev=>{
+  ev.preventDefault();
+  if(ev.touches.length===1){
+    const t0=ev.touches[0];
+    drag={x:t0.clientX,y:t0.clientY,moved:false};
+  }else if(ev.touches.length===2){
+    drag=null;
+    pinch=Math.hypot(ev.touches[0].clientX-ev.touches[1].clientX,
+                     ev.touches[0].clientY-ev.touches[1].clientY);
+  }
+},{passive:false});
+cv.addEventListener('touchmove',ev=>{
+  ev.preventDefault();
+  if(ev.touches.length===1&&drag){
+    moveDrag(ev.touches[0].clientX,ev.touches[0].clientY);
+  }else if(ev.touches.length===2&&pinch&&embedMode()){
+    const d=Math.hypot(ev.touches[0].clientX-ev.touches[1].clientX,
+                       ev.touches[0].clientY-ev.touches[1].clientY);
+    emb.zoom=Math.max(.3,Math.min(6,emb.zoom*d/pinch));
+    pinch=d;draw();
+  }
+},{passive:false});
+cv.addEventListener('touchend',ev=>{
+  ev.preventDefault();
+  if(drag&&!drag.moved&&ev.changedTouches.length){
+    const t0=ev.changedTouches[0];
+    clickAt({clientX:t0.clientX,clientY:t0.clientY});
+  }
+  drag=null;pinch=null;
+},{passive:false});
+cv.addEventListener('wheel',ev=>{
+  ev.preventDefault();
+  if(embedMode()){                          // embed: wheel zooms the cloud
+    emb.zoom=Math.max(.3,Math.min(6,emb.zoom*Math.exp(-ev.deltaY*.002)));
+    draw();return;
+  }
+  if(Math.abs(ev.deltaX)>Math.abs(ev.deltaY)&&viz.frames.length){
+    viz.offset=Math.min(viz.frames.length-1,
+      Math.max(0,viz.offset+Math.round(ev.deltaX/CW)||0));
+    viz.follow=viz.offset>=viz.frames.length-1;
+    draw();
+  }else log.scrollTop+=ev.deltaY;           // heatmap: wheel scrolls chat
+},{passive:false});
+function cycleMetric(){
+  const av=availableMetrics();
+  let m=viz.metric;
+  do{m=(m+1)%METRICS.length;}while(!av.has(m)&&m!==viz.metric);
+  viz.metric=m;
+  $('metric').textContent='viz: '+METRICS[m][0];
+  $('metric').title=`cycle heatmap metric — available: `+
+    [...av].sort().map(i=>METRICS[i][0]).join(', ');
+  if(!explain.hidden)syncExplain();
+  draw();
+}
+$('metric').onclick=cycleMetric;
+window.addEventListener('resize',draw);
+new ResizeObserver(draw).observe(cv);       // pane resizes may skip 'resize'
+
+// ═════════ cut-out panel — dashboard drill-down for a clicked cell ═════════
+let sel=null,panelPos={x:80,y:200};         // sel: {fi: frame idx, i: layer|null}
+draw();
+const panel=$('panel');
+function el(tag,cls,text){
+  const e=document.createElement(tag);
+  if(cls)e.className=cls;
+  if(text!==undefined)e.textContent=text;
+  return e;
+}
+function bar(cls,label,frac,val){
+  const b=el('div','bar'+(cls?' '+cls:'')),tr=el('div','track');
+  tr.appendChild(Object.assign(el('div','fill'),
+    {style:`width:${Math.max(2,Math.round(frac*100))}%`}));
+  b.append(el('label',null,label),tr,el('span','pv',val));
+  return b;
+}
+function srcsSection(fi,d){                 // where the token attended
+  if(!d.attn_srcs?.length)return [];
+  const rows=[el('h4',null,'attention sources · mean over heads'+
+    (d.attn_entropy!==undefined
+      ?` · spread ${(d.attn_entropy*100).toFixed(0)}%`:''))];
+  for(const[p,w]of d.attn_srcs){
+    const L2=posLabel(fi,p);
+    rows.push(bar('tk',(L2.ctx?'ctx ':'')+JSON.stringify(L2.text),
+                  w,(w*100).toFixed(1)+'%'));
+  }
+  rows.push(el('div','note','also drawn as arcs over the token strip'));
+  return rows;
+}
+function headsSection(d){
+  const m=Math.max(...d.head_norms,1e-9),grid=el('div','hgrid');
+  d.head_norms.forEach((v,h)=>grid.appendChild(bar('','h'+h,v/m,v.toFixed(2))));
+  return [el('h4',null,`attention · all ${d.head_norms.length} heads`),grid,
+          el('div','note','per-head output norms · attention sources above '+
+                          'are mean-over-heads (per-head maps not streamed)')];
+}
+function moeSection(i,d){
+  const rows=[el('h4',null,'router flow · chosen experts')];
+  for(const[e,w]of d.expert_weights)
+    rows.push(bar('','E'+e,w,(w*100).toFixed(0)+'%'));
+  const util={};let tot=0;                  // routing mass across the whole run
+  for(const fr of viz.frames)
+    for(const[e,w]of(fr.layers[i]?.expert_weights||[])){
+      util[e]=(util[e]||0)+w;tot+=w;
+    }
+  const top=Object.keys(util).sort((a,b)=>util[b]-util[a]).slice(0,8);
+  if(top.length&&tot>0){
+    const nE=viz.topo.layers[i].mlp?.experts||'?';
+    rows.push(el('h4',null,`expert utilization · run · ${nE} experts`));
+    for(const e of top)
+      rows.push(bar('','E'+e,util[e]/tot,((util[e]/tot)*100).toFixed(0)+'%'));
+  }
+  return rows;
+}
+function convSection(d){
+  const rows=[el('div','note',
+    'gated short-convolution mixer — no attention matrix')];
+  if(d.delta?.length){
+    rows.unshift(el('h4',null,`Δ selectivity · mean ${d.delta_mean}`));
+    const m=Math.max(...d.delta,1e-9),grid=el('div','hgrid');
+    d.delta.forEach((v,j)=>grid.appendChild(bar('','δ'+j,v/m,v.toFixed(2))));
+    rows.splice(1,0,grid);
+  }
+  return rows;
+}
+function sparkSection(i){
+  const[mname,key]=METRICS[viz.metric][1]
+    ?METRICS[viz.metric]:['resid','resid_norm'];   // embed mode → resid
+  const vals=viz.frames.map(fr=>fr.layers[i]?.[key]??0);
+  const c=el('canvas');c.width=312;c.height=46;
+  const m=Math.max(...vals,1e-9),g2=c.getContext('2d');
+  g2.strokeStyle='#B02E3C';g2.lineWidth=1.2;g2.beginPath();
+  vals.forEach((v,j)=>{
+    const x=j/Math.max(1,vals.length-1)*306+3,y=42-(v/m)*38;
+    j?g2.lineTo(x,y):g2.moveTo(x,y);
+  });
+  g2.stroke();
+  const x=sel.fi/Math.max(1,vals.length-1)*306+3,
+        y=42-((vals[sel.fi]||0)/m)*38;
+  g2.fillStyle='#22344A';g2.beginPath();g2.arc(x,y,2.5,0,7);g2.fill();
+  return [el('h4',null,`${mname} norm over tokens · this layer`),c];
+}
+function lensSection(f,selI){
+  if(!f.lens?.length)return [];
+  const rows=[el('h4',null,'logit lens · predicted token by depth')];
+  const wrap=el('div','lens');
+  f.lens.forEach(([w,p],i)=>{
+    const chg=i>0&&f.lens[i-1][0]!==w;
+    const r=el('div','lrow'+(chg?' chg':'')+(i===selI?' sel':''));
+    if(chg)r.title='prediction changes at this layer';
+    r.append(el('span','ln',`L${String(i).padStart(2,'0')}`),
+             el('span','lw',JSON.stringify(w)),
+             el('span','lp',(p*100).toFixed(0)+'%'));
+    wrap.appendChild(r);
+  });
+  rows.push(wrap);
+  const first=f.lens.findIndex(([w])=>w===f.text);
+  rows.push(el('div','note',first>=0
+    ?`settles on ${JSON.stringify(f.text)} at L${String(first).padStart(2,'0')}`
+    :'final token never top-1 in lens (sampled off-argmax)'));
+  return rows;
+}
+function topkSection(f){
+  if(!f.topk?.length)return [];
+  const rows=[el('h4',null,'predicted next token · final logits')];
+  for(const[w,p]of f.topk)
+    rows.push(bar('tk',JSON.stringify(w),p,
+      (p*100).toFixed(p>=.1?0:1)+'%'));
+  return rows;
+}
+function renderPanel(){
+  if(!sel||!viz.topo)return closePanel();
+  const f=viz.frames[sel.fi];
+  if(!f)return closePanel();
+  const h3=el('h3'),x=el('span','x','✕');
+  x.onclick=closePanel;
+  const rows=[h3];
+  if(sel.i===null){                         // token-level cut-out
+    h3.append(el('span',null,
+      `t=${f.t} ${JSON.stringify(f.text)}`+(f.eos?' · eos':'')),x);
+    if(f.entropy!==undefined){
+      const kv=el('div','kv');
+      kv.append(el('span',null,'uncertainty'),
+        el('span',null,`${f.entropy} bits · margin `+
+                       `${(f.margin*100).toFixed(1)}%`));
+      rows.push(kv);
+    }
+    rows.push(...topkSection(f));
+    rows.push(...lensSection(f,null));
+  }else{                                    // layer-level cut-out
+    const L=viz.topo.layers[sel.i],d=f.layers[sel.i];
+    h3.append(el('span',null,
+      `L${String(sel.i).padStart(2,'0')} ${kindGlyph(L)} ${L.attn.kind} · `+
+      `t=${f.t} ${JSON.stringify(f.text)}`),x);
+    if(!d){                                 // browser run: no layer internals
+      rows.push(el('div','note','no per-layer internals — this token was '+
+        'generated in-browser (ONNX graph, no hook points). tokens and '+
+        'final predictions below are real; norms/lens/heads need the '+
+        'server engine.'));
+      rows.push(...topkSection(f));
+    }else{
+    for(const[k,v]of[['mlp',d.mlp_norm],['attn',d.attn_norm],
+                     ['resid',d.resid_norm]]){
+      if(v===undefined)continue;            // observable runs: resid only
+      const kv=el('div','kv');
+      kv.append(el('span',null,k+' norm'),el('span',null,String(v)));
+      rows.push(kv);
+    }
+    rows.push(...srcsSection(sel.fi,d));
+    rows.push(...lensSection(f,sel.i));
+    if(d.expert_weights)rows.push(...moeSection(sel.i,d));
+    if(d.head_norms?.length)rows.push(...headsSection(d));
+    else if(L.attn.kind==='conv'||L.attn.kind==='ssm')
+      rows.push(...convSection(d));
+    else rows.push(el('div','note',
+      'per-head norms not exposed by this engine/export'));
+    rows.push(...sparkSection(sel.i));
+    rows.push(...topkSection(f));
+    }
+  }
+  const link=el('div','note');
+  const a=el('a',null,'full drill-down in the dashboard ↗');
+  const base=location.protocol.startsWith('http')?'':'http://localhost:8080';
+  const q=sel.i===null?`t=${f.t}`:
+    `layer=${sel.i}&block=${METRICS[viz.metric][0]==='mlp'?1:0}&t=${f.t}`;
+  a.href=`${base}/dashboard?ws=1&${q}`;a.target='_blank';
+  link.appendChild(a);
+  rows.push(link);
+  panel.replaceChildren(...rows);
+  panel.style.display='block';
+  const r=panel.getBoundingClientRect();    // clamp near the click
+  panel.style.left=Math.max(8,Math.min(panelPos.x+14,innerWidth-r.width-12))+'px';
+  panel.style.top=Math.max(8,Math.min(panelPos.y+14,innerHeight-r.height-12))+'px';
+}
+function closePanel(){
+  sel=null;panel.style.display='none';draw();
+}
+// ══════════════════ explainer — viz modes and their rationale ══════════════
+const explain=$('explain');
+function syncExplain(){                     // active + availability per card
+  const av=availableMetrics();
+  explain.querySelectorAll('.mode').forEach(m=>{
+    m.classList.toggle('active',+m.dataset.m===viz.metric);
+    m.classList.toggle('off',!av.has(+m.dataset.m));
+    m.title=av.has(+m.dataset.m)?''
+      :'no data for this mode in the current run/engine';
+  });
+}
+$('help').onclick=()=>{
+  explain.hidden=!explain.hidden;
+  if(!explain.hidden)syncExplain();
+};
+explain.querySelector('.x').onclick=()=>{explain.hidden=true;};
+explain.querySelectorAll('.mode').forEach(m=>m.onclick=()=>{
+  if(m.classList.contains('off'))return;    // no data → not selectable
+  viz.metric=+m.dataset.m;
+  $('metric').textContent='viz: '+METRICS[viz.metric][0];
+  syncExplain();draw();
+});
+
+window.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){
+    if(!explain.hidden){explain.hidden=true;return;}
+    return closePanel();
+  }
+  if(embedMode()){
+    const tg=document.activeElement?.tagName;
+    if(tg!=='INPUT'&&tg!=='TEXTAREA'){
+      const nL=viz.topo?viz.topo.layers.length:0;
+      if(e.key==='d'||e.key==='D'){
+        emb.dim=emb.dim===3?2:3;e.preventDefault();return draw();
+      }
+      if(e.key==='t'||e.key==='T'){
+        emb.labels={auto:'all',all:'off',off:'auto'}[emb.labels];
+        e.preventDefault();return draw();
+      }
+      if(e.key==='c'||e.key==='C'){
+        emb.ctx=!emb.ctx;e.preventDefault();return draw();
+      }
+      if(!sel&&e.key==='ArrowUp'&&nL){      // walk the depth axis
+        emb.layer=Math.max(0,(emb.layer??nL-1)-1);
+        e.preventDefault();return draw();
+      }
+      if(!sel&&e.key==='ArrowDown'&&nL){
+        emb.layer=Math.min(nL-1,(emb.layer??nL-1)+1);
+        e.preventDefault();return draw();
+      }
+    }
+  }
+  if(!sel)return;                           // arrows navigate the selection
+  const tag=document.activeElement?.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA')return;
+  const n=viz.topo?viz.topo.layers.length:0;
+  if(e.key==='ArrowLeft')sel.fi=Math.max(0,sel.fi-1);
+  else if(e.key==='ArrowRight')
+    sel.fi=Math.min(viz.frames.length-1,sel.fi+1);
+  else if(e.key==='ArrowUp')
+    sel.i=(sel.i===null||sel.i===0)?null:sel.i-1;   // L0 → token strip
+  else if(e.key==='ArrowDown')
+    sel.i=sel.i===null?0:Math.min(n-1,sel.i+1);
+  else return;
+  e.preventDefault();
+  const g=geometry();                       // keep the selection in view
+  if(sel.fi>viz.offset)viz.offset=sel.fi;
+  else if(sel.fi<g.first)
+    viz.offset=Math.min(viz.frames.length-1,sel.fi+g.cols-1);
+  viz.follow=viz.offset>=viz.frames.length-1;
+  renderPanel();draw();
+});
+
+// ═════════════════════════════════ chat ════════════════════════════════════
+function bubble(cls,text){
+  const el=document.createElement('div');
+  el.className='msg '+cls;
+  el.textContent=text;
+  log.appendChild(el);
+  log.scrollTop=log.scrollHeight;
+  return el;
+}
+
+async function send(){
+  const text=input.value.trim();
+  if(!text||busy)return;
+  busy=true;$('send').disabled=true;
+  input.value='';input.style.height='auto';
+  msgs.push({role:'user',content:text});
+  bubble('user',text);
+  const el=bubble('assistant',''); el.classList.add('busy');
+  const t0=performance.now(); let n=0,reply='';
+  try{
+    if(engine!=='server'){                  // in-browser generation
+      if(!localGen||localGenId!==engine)
+        throw new Error('browser model still loading — watch the header');
+      const topo=await localTopology(engine);
+      if(topo)onProto(topo);                // viz: reset/boundary like a run
+      localFrameT=0;lastTopk=null;
+      const obs=localGen.observable;
+      if(obs){obs.pending=null;obs.ctx=null;}
+      const lp=obs?null:mkTopkList();       // observable taps logits itself
+      const streamer=new localT.TextStreamer(localGen.tokenizer,{
+        skip_prompt:true,skip_special_tokens:true,
+        callback_function:txt=>{
+          reply+=txt;n++;el.textContent=reply;
+          log.scrollTop=log.scrollHeight;
+          if(topo){
+            if(obs?.ctx){onProto(obs.ctx);obs.ctx=null;}
+            const cap=obs?.pending;
+            if(obs)obs.pending=null;
+            onProto({type:'token',t:localFrameT++,text:txt,
+              ...(cap?{layers:cap.layers,proj:cap.proj,topk:cap.topk}
+                     :{...(lastTopk?{topk:lastTopk}:{}),layers:[]})});
+          }
+          lastTopk=null;
+        }});
+      await localGen(msgs,{max_new_tokens:+$('maxtok').value||256,
+        do_sample:+$('temp').value>0,temperature:+$('temp').value||1,
+        streamer,...(lp?{logits_processor:lp}:{})});
+    }else{
+      const res=await fetch($('base').value+'/chat/completions',{
+        method:'POST',headers:{'content-type':'application/json'},
+        body:JSON.stringify({model,messages:msgs,stream:true,
+          max_tokens:+$('maxtok').value||256,
+          temperature:+$('temp').value||0})});
+      if(!res.ok)throw new Error('HTTP '+res.status+' '+await res.text());
+      const rd=res.body.getReader(),dec=new TextDecoder();
+      let buf='';
+      for(;;){
+        const {done,value}=await rd.read();
+        if(done)break;
+        buf+=dec.decode(value,{stream:true});
+        const lines=buf.split('\n'); buf=lines.pop();
+        for(const line of lines){
+          if(!line.startsWith('data: '))continue;
+          const data=line.slice(6);
+          if(data==='[DONE]')continue;
+          const delta=JSON.parse(data).choices?.[0]?.delta?.content;
+          if(delta){reply+=delta;n++;el.textContent=reply;
+                    log.scrollTop=log.scrollHeight;}
+        }
+      }
+    }
+    msgs.push({role:'assistant',content:reply});
+    const dt=(performance.now()-t0)/1000;
+    const meta=document.createElement('span');
+    meta.className='meta';
+    meta.textContent=`${n} tok · ${dt.toFixed(1)}s · ${(n/dt).toFixed(1)} tok/s`;
+    el.appendChild(meta);
+  }catch(e){
+    el.remove();
+    bubble('error','error: '+e.message);
+    msgs.pop();                                  // let the user retry the turn
+  }finally{
+    el.classList.remove('busy');
+    busy=false;$('send').disabled=false;input.focus();
+  }
+}
+
+$('send').onclick=send;
+input.onkeydown=e=>{
+  if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}
+};
+input.oninput=()=>{
+  input.style.height='auto';
+  input.style.height=Math.min(input.scrollHeight,140)+'px';
+};
+$('clear').onclick=()=>{msgs=[];log.replaceChildren();input.focus();};
+input.focus();
+</script>
+</body>
+</html>

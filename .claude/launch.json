@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-real",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["api_server.py", "--model", "LiquidAI/LFM2.5-1.2B-Instruct", "--device", "mps"],
+      "port": 8080
+    },
+    {
+      "name": "api-mock",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["api_server.py", "--mock"],
+      "port": 8080
+    },
+    {
+      "name": "ws-live",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["server.py", "--model", "LiquidAI/LFM2.5-1.2B-Instruct", "--device", "mps"],
+      "port": 8765
+    },
+    {
+      "name": "ws-replay",
+      "runtimeExecutable": ".venv/bin/python",
+      "runtimeArgs": ["replay.py", "traces/mock_moe_24L_120t.ndjson", "--rate", "12", "--loop"],
+      "port": 8765
+    }
+  ]
+}

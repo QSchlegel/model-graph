@@ -1,0 +1,28 @@
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": true,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {"query": "tag:#map", "color": {"a": 1, "rgb": 2241610}},
+    {"query": "tag:#diagram", "color": {"a": 1, "rgb": 11546172}},
+    {"query": "tag:#component", "color": {"a": 1, "rgb": 14916397}},
+    {"query": "tag:#reference", "color": {"a": 1, "rgb": 4095144}},
+    {"query": "tag:#research", "color": {"a": 1, "rgb": 7043724}},
+    {"query": "tag:#roadmap", "color": {"a": 1, "rgb": 3050356}}
+  ],
+  "collapse-display": true,
+  "showArrow": true,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1.2,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 12,
+  "linkStrength": 1,
+  "linkDistance": 220,
+  "scale": 1
+}

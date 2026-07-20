@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>model-graph · generic runtime visualizer</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='5' y='5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='13.5' y='5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='5' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='5' y='13.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='13.5' y='13.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='13.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='5' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='13.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='17' r='3.1' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat0:#D8DEE6; --heat1:#E39B2D; --heat2:#B02E3C;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--paper);color:var(--ink);font:13px/1.45 var(--mono)}
+  header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;
+         padding:8px 12px;border-bottom:1px solid var(--line);background:var(--panel);
+         position:sticky;top:0;z-index:5}
+  header h1{font-size:14px;font-weight:600}
+  #stat{color:var(--muted);font-size:12px}
+  .ctl{margin-left:auto;display:flex;gap:6px;align-items:center}
+  button,select{font:12px var(--mono);color:var(--ink);background:var(--panel);
+         border:1px solid var(--ink);border-radius:3px;padding:4px 8px;
+         cursor:pointer;touch-action:manipulation}
+  button:hover,button.active{background:var(--ink);color:var(--panel)}
+  #crumb{padding:6px 12px;font-size:12px;background:var(--panel);
+         border-bottom:1px solid var(--line)}
+  #crumb a{color:var(--ink);text-decoration:none;cursor:pointer;font-weight:600}
+  #crumb a:hover{text-decoration:underline}
+  #crumb .sep{color:var(--muted);margin:0 6px}
+  #crumb .leaf{color:var(--heat2);font-weight:600}
+  section.pad{padding:10px 12px}
+  h2{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;
+     color:var(--muted);margin-bottom:6px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:6px;
+        padding:10px 12px;margin-bottom:12px}
+  #raster{width:100%;display:block;cursor:crosshair}
+  #grid{display:grid;grid-template-columns:1fr 300px;gap:12px;
+        padding:0 12px 12px;align-items:start}
+  #stack{position:relative}
+  .lhead{display:flex;align-items:stretch;gap:8px;min-height:30px;padding:2px 0}
+  .llab{width:34px;color:var(--muted);font-size:10px;align-self:center}
+  .seg{width:9px;border-radius:4px;background:var(--line);flex:none}
+  .bcard{flex:1;border:1px solid var(--ink);border-radius:4px;
+        padding:3px 8px;cursor:pointer;font-size:11px;background:var(--heat0);
+        display:flex;justify-content:space-between;align-items:center;gap:6px;min-width:0}
+  .bcard.dashed{border-style:dashed}
+  .bcard.dotted{border-style:dotted;border-width:1.5px}
+  .bcard.open{outline:2px solid var(--heat2)}
+  .bcard .bn{color:var(--muted);font-size:10px}
+  .chips{display:grid;grid-template-columns:repeat(8,7px);gap:1.5px}
+  .chip{width:7px;height:7px;border:.5px solid var(--muted);border-radius:1px;background:#fff}
+  .lexp{margin:4px 0 8px 42px;padding:8px 10px;border:1px solid var(--line);
+        border-radius:6px;background:var(--panel)}
+  .lexp h3{font-size:10px;font-weight:600;color:var(--muted);
+        text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+  .lexp canvas{width:100%;display:block}
+  .lexp svg{width:100%;height:auto;display:block}
+  .note{font-size:10px;color:var(--muted)}
+  .kv{display:flex;justify-content:space-between;font-size:11px;
+      border-bottom:1px dashed var(--line);padding:2px 0}
+  .bar{display:flex;align-items:center;gap:6px;margin:2px 0}
+  .bar label{width:34px;color:var(--muted);font-size:11px;text-align:right}
+  .bar .track{flex:1;height:8px;background:var(--heat0);border-radius:2px;overflow:hidden}
+  .bar .fill{height:100%;background:linear-gradient(90deg,var(--heat1),var(--heat2))}
+  .bar.click{cursor:pointer}
+  .bar.click:hover .track{outline:1px solid var(--ink)}
+  .bar.on .track{outline:2px solid var(--heat2)}
+  .fbox{fill:#fff;stroke:var(--ink);stroke-width:1}
+  .fbox.pick{cursor:pointer}
+  .fbox.on{stroke:var(--heat2);stroke-width:2.5}
+  .flbl{font:10px var(--mono);fill:var(--ink)}
+  .fmut{font:9px var(--mono);fill:var(--muted)}
+  .fedge{fill:none;stroke:var(--muted)}
+  .fedge.hot{stroke:var(--heat2)}
+  #spark,#util{width:100%;display:block}
+  footer{border-top:1px solid var(--line);background:var(--panel);
+         padding:8px 10px;white-space:nowrap;overflow-x:auto;
+         position:sticky;bottom:0}
+  .tok{display:inline-block;padding:5px 9px;margin-right:5px;border:1px solid var(--line);
+       border-radius:3px;cursor:pointer;font-size:12px}
+  .tok.sel{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+  @media (max-width:760px){
+    #grid{grid-template-columns:1fr}
+    .ctl{margin-left:0;width:100%;justify-content:space-between}
+    .lexp{margin-left:0}
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1><a href="/" style="color:inherit;text-decoration:none"
+         title="about model-graph">model-graph</a>
+      <a href="/chat" style="color:var(--muted);text-decoration:none;
+         font-weight:400;font-size:12px" title="open the chat">· chat</a></h1>
+  <span id="stat">—</span>
+  <div class="ctl">
+    <select id="preset">
+      <option value="moe24">mock · MoE transformer</option>
+      <option value="dense24">mock · dense transformer</option>
+      <option value="hybrid20">mock · hybrid SSM+MoE</option>
+      <option value="lfmlike16">mock · conv+attn (LFM-like)</option>
+    </select>
+    <button id="btn-load">trace</button>
+    <button id="btn-ws">ws</button>
+    <input type="file" id="filein" accept=".ndjson,.jsonl,.json" hidden>
+    <button id="btn-play">⏸</button>
+    <button id="btn-seed">reseed</button>
+  </div>
+</header>
+<nav id="crumb"></nav>
+
+<section class="pad">
+  <div class="card">
+    <h2>run overview · channel-mixer output norm, layers × tokens (click to inspect)</h2>
+    <canvas id="raster" height="150"></canvas>
+  </div>
+</section>
+
+<div id="grid">
+  <div class="card">
+    <h2 id="stackh">layer stack · tap any block card to unfold it</h2>
+    <div id="stack"></div>
+  </div>
+  <div id="colright">
+    <div class="card">
+      <h2 id="sparkh">block norms over tokens</h2>
+      <canvas id="spark" height="70"></canvas>
+      <div id="sparkleg" class="note"></div>
+    </div>
+    <div class="card" id="utilcard">
+      <h2>expert utilization</h2>
+      <canvas id="util" height="80"></canvas>
+      <div class="note">share of routing mass per expert · click a bar to drill in</div>
+    </div>
+  </div>
+</div>
+
+<footer id="tokens"></footer>
+
+<script>
+'use strict';
+// ═══════════════════════════════ RNG ══════════════════════════════════════
+function rngFactory(s){let a=s>>>0;return function(){
+  a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);
+  t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+let seed=42;
+function subRng(t,i,salt){return rngFactory(((seed*2654435761)^(t*40503)^(i*2246822519)^salt)>>>0);}
+
+// ═══════════════════════ schema v2 + v1 adapter ════════════════════════════
+// v2 topology layer: {i, blocks:[{id,kind,subkind?,heads?,experts?,topk?}]}
+// v2 frame layer:    {i, resid, blocks:{id:{norm, heads?, router?, top?, ...}}}
+function normTopo(msg){
+  if(msg.layers.length&&msg.layers[0].blocks)return msg;      // already v2
+  return {...msg,layers:msg.layers.map(L=>({i:L.i,blocks:[
+    {id:'mixer',
+     kind:L.attn.kind==='conv'?'conv':'attention',
+     subkind:L.attn.kind==='conv'?null:L.attn.kind,
+     heads:L.attn.heads||0},
+    {id:'ffn',
+     kind:L.mlp.kind==='moe'?'moe':'mlp',
+     experts:L.mlp.experts||0,topk:L.mlp.topk||0},
+  ]}))};
+}
+function normFrame(msg){
+  if(msg.layers.length&&msg.layers[0].blocks)return msg;
+  return {...msg,layers:msg.layers.map(L=>({i:L.i,resid:L.resid_norm,
+    blocks:{
+      mixer:Object.assign({norm:L.attn_norm,heads:L.head_norms||[]},
+          ...['delta_mean','delta','state_norm','decay'].map(k=>
+            L[k]!==undefined?{[k]:L[k]}:{})),
+      ffn:Object.assign({norm:L.mlp_norm},
+          L.router?{router:L.router}:{},
+          L.expert_weights?{top:L.expert_weights}:{}),
+    }}))};
+}
+
+// ═══════════════════════ mock presets (emit v2) ════════════════════════════
+const TEXT=("the model reads each token and updates its residual stream layer "
+ +"by layer until the final norm projects back into vocabulary space .").split(" ");
+const MAXTOK=120;
+
+const PRESETS={
+  moe24:{name:'mock-24L-moe',n:24,
+    mixer:i=>({id:'mixer',kind:'attention',subkind:(i+1)%4===0?'global':'local',heads:8}),
+    ffn:  i=>({id:'ffn',kind:'moe',experts:16,topk:2})},
+  dense24:{name:'mock-24L-dense',n:24,
+    mixer:i=>({id:'mixer',kind:'attention',subkind:(i+1)%4===0?'global':'local',heads:8}),
+    ffn:  i=>({id:'ffn',kind:'mlp'})},
+  hybrid20:{name:'mock-20L-ssm-moe',n:20,
+    mixer:i=>i%4===3?{id:'mixer',kind:'attention',subkind:'global',heads:8}
+                    :{id:'mixer',kind:'ssm',subkind:'mamba'},
+    ffn:  i=>i%2?{id:'ffn',kind:'moe',experts:8,topk:2}:{id:'ffn',kind:'mlp'}},
+  lfmlike16:{name:'mock-16L-conv-attn',n:16,
+    mixer:i=>[2,5,8,10,12,14].includes(i)
+      ?{id:'mixer',kind:'attention',subkind:'global',heads:32}
+      :{id:'mixer',kind:'conv',subkind:'liv'},
+    ffn:  i=>({id:'ffn',kind:'mlp'})},
+};
+
+function makeSim(presetKey){
+  const P=PRESETS[presetKey];
+  const rnd=rngFactory(seed);
+  const u=(a,b)=>a+(b-a)*rnd();
+  const sample=(n,k)=>{const s=new Set();while(s.size<k)s.add(Math.floor(rnd()*n));return[...s];};
+  const topo={type:'topology',model:P.name,
+    layers:[...Array(P.n)].map((_,i)=>({i,blocks:[P.mixer(i),P.ffn(i)]}))};
+  const spikes=new Set(sample(P.n,Math.max(1,P.n>>3)).filter(x=>x>=2));
+  const dom={},pools={},walk=[...Array(P.n)].map(()=>u(0.8,1.2));
+  const sstate={},sdecay={};
+  topo.layers.forEach(L=>{
+    const mx=L.blocks[0],ff=L.blocks[1];
+    if(mx.kind==='attention')dom[L.i]=sample(mx.heads,2);
+    if(mx.kind==='ssm'){sstate[L.i]=0.5;sdecay[L.i]=u(0.86,0.97);}
+    if(ff.kind==='moe')pools[L.i]=sample(ff.experts,Math.min(4,ff.experts));
+  });
+  let t=0;
+  function next(){
+    if(t>=MAXTOK)return null;
+    const layers=topo.layers.map((T,i)=>{
+      walk[i]=Math.min(2,Math.max(0.4,walk[i]+u(-0.08,0.08)));
+      const depth=1+3.2*Math.pow(i/(P.n-1),1.3);
+      const blocks={};
+      const mx=T.blocks[0],ff=T.blocks[1];
+      const g=mx.subkind==='global'?1.15:1;
+      const mnorm=depth*g*walk[i]*u(0.85,1.15);
+      blocks[mx.id]={norm:round4(mnorm)};
+      if(mx.kind==='attention')
+        blocks[mx.id].heads=[...Array(mx.heads)].map((_,h)=>
+          round4(mnorm*(dom[i].includes(h)?1.6:0.55)*u(0.8,1.2)));
+      if(mx.kind==='ssm'){
+        // selective SSM proxy: Δ high on content tokens ("read"), low on filler
+        const word=TEXT[t%TEXT.length];
+        const content=Math.min(1,word.length/8);
+        const dmean=Math.min(0.95,Math.max(0.05,(0.12+0.72*content)*u(0.8,1.2)));
+        const d=sdecay[i];
+        sstate[i]=d*sstate[i]+dmean*u(0.7,1.3);              // leaky integrator
+        blocks[mx.id].delta_mean=round4(dmean);
+        blocks[mx.id].delta=[...Array(24)].map(()=>
+          round4(Math.min(1,Math.max(0,dmean*u(0.4,1.7)))));
+        blocks[mx.id].state_norm=round4(depth*sstate[i]);
+        blocks[mx.id].decay=round4(d);
+      }
+      const fnorm=depth*walk[i]*(spikes.has(i)?2.2:1)*u(0.9,1.25);
+      blocks[ff.id]={norm:round4(fnorm)};
+      if(ff.kind==='moe'){
+        const E=ff.experts;
+        if(rnd()<0.08)pools[i][Math.floor(rnd()*pools[i].length)]=Math.floor(rnd()*E);
+        const logits=[...Array(E)].map((_,e)=>u(-2,0)+(pools[i].includes(e)?u(1.5,3):0));
+        const mxl=Math.max(...logits);
+        const ex=logits.map(l=>Math.exp(l-mxl)),s=ex.reduce((a,b)=>a+b,0);
+        blocks[ff.id].router=ex.map(v=>round4(v/s));
+        blocks[ff.id].top=blocks[ff.id].router.map((w,e)=>[e,w])
+          .sort((a,b)=>b[1]-a[1]).slice(0,ff.topk);
+      }
+      return {i,resid:round4(depth*6*u(0.95,1.05)),blocks};
+    });
+    return {type:'token',t:t,text:TEXT[t++%TEXT.length],layers};
+  }
+  return {topo,next};
+}
+function round4(x){return Math.round(x*1e4)/1e4;}
+
+// mock-only derived views ----------------------------------------------------
+function attnMatrix(t,i,sub,head){
+  const N=Math.min(t+1,24),W=8,rnd=subRng(t,i,head==null?7:7+31*(head+1));
+  const sharp=head==null?1:(head%2===0?0.6:1.8);
+  const M=[];
+  for(let q=0;q<N;q++){const row=new Array(N).fill(0);
+    for(let k=0;k<=q;k++){const d=q-k;let w;
+      if(sub==='local')w=d<W?Math.exp(-d/(2.5*sharp))*(0.6+0.8*rnd()):0.001*rnd();
+      else{w=Math.exp(-d/(9*sharp))*(0.4+0.6*rnd());
+        if(k===0)w+=(head==null||head%3===0?1.2+0.8*rnd():0.1*rnd());
+        if(k%7===3)w+=0.5*rnd();}
+      row[k]=w;}
+    const s=row.reduce((a,b)=>a+b,0)||1;M.push(row.map(v=>v/s));}
+  return M;
+}
+
+// ═══════════════════════════════ state ═════════════════════════════════════
+let sim=null,topo=null,frames=[],selT=-1,selL=0,playing=true;
+let runMax={},util={};
+let mode='mock',preset='moe24',queue=[],maxTok=MAXTOK,dataReal=false,ws=null;
+let selBi=null,selExpert=null;                 // drill: block index, expert
+const expOpen=new Set();                        // `${i}:${bi}` expanded rows
+const headSel={};                               // `${i}:${bi}` -> head
+
+function heat(v){const st=[[216,222,230],[227,155,45],[176,46,60]];
+  const x=Math.max(0,Math.min(1,v))*2,i=x<1?0:1,f=x-i;
+  const c=st[i].map((a,k)=>Math.round(a+(st[i+1][k]-a)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;}
+function mapHeat(v){const st=[[15,27,42],[227,155,45],[176,46,60]];
+  const x=Math.max(0,Math.min(1,v))*2,i=x<1?0:1,f=x-i;
+  const c=st[i].map((a,k)=>Math.round(a+(st[i+1][k]-a)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;}
+function norm(key,v){runMax[key]=Math.max(runMax[key]||1e-9,v);return v/runMax[key];}
+function frame(){return frames[selT===-1?frames.length-1:selT];}
+function nLayers(){return topo?topo.layers.length:0;}
+function fBlock(f,i,bi){const T=topo.layers[i].blocks[bi];return f.layers[i].blocks[T.id]||{norm:0};}
+function moeAt(i){const bs=topo.layers[i].blocks;
+  const bi=bs.findIndex(b=>b.kind==='moe');return bi<0?null:bi;}
+
+// ═══════════════════ block renderer registry ═══════════════════════════════
+// Each kind: label(T), cardClass, expand(i,bi,T) -> innerHTML, paintExpand(i,bi,T,f)
+const REG={
+  attention:{
+    label:T=>`A ${T.subkind==='global'?'◉':'◌'} ${T.subkind||'attn'}`,
+    cls:T=>T.subkind==='local'?'dashed':'',
+    expand(i,bi,T){
+      if(dataReal)return `<h3 id="xh-${i}-${bi}"></h3><div id="xb-${i}-${bi}"></div>
+        <div class="note" style="margin-top:4px">measured head norms · matrix not captured (enable output_attentions + eager attn)</div>`;
+      return `<h3 id="xh-${i}-${bi}"></h3><canvas id="xc-${i}-${bi}" height="190"></canvas>
+        <div id="xb-${i}-${bi}" style="margin-top:6px"></div>`;
+    },
+    paint(i,bi,T,f){
+      const B=fBlock(f,i,bi),hn=B.heads||[],key=`${i}:${bi}`,h=headSel[key];
+      setText(`xh-${i}-${bi}`,`attention · ${h!=null?'head h'+h:'all heads'} · ${T.subkind||''} · ‖out‖ ${(h!=null&&hn[h]!=null?hn[h]:B.norm).toFixed(2)}`);
+      const cv=document.getElementById(`xc-${i}-${bi}`);
+      if(cv){
+        const W=cv.parentElement.clientWidth-20;cv.width=W;
+        const M=attnMatrix(f.t,i,T.subkind,h),N=M.length;
+        const cell=Math.min(Math.floor(W/N),Math.floor(190/N));
+        const c=cv.getContext('2d');
+        c.fillStyle='#0F1B2A';c.fillRect(0,0,W,190);
+        const mA=Math.max(...M.flat(),1e-9),ox=Math.floor((W-N*cell)/2);
+        for(let q=0;q<N;q++)for(let k=0;k<N;k++){
+          c.fillStyle=mapHeat(M[q][k]/mA);c.fillRect(ox+k*cell,q*cell,cell-0.5,cell-0.5);}
+      }
+      const xb=document.getElementById(`xb-${i}-${bi}`);
+      if(xb&&hn.length){
+        const mx=Math.max(...hn,1e-9);
+        xb.innerHTML=hn.map((v,hh)=>
+          `<div class="bar click ${h===hh?'on':''}" data-h="${hh}"><label>h${hh}</label><div class="track"><div class="fill" style="width:${(100*v/mx).toFixed(1)}%"></div></div></div>`).join('');
+        xb.onclick=ev=>{const b=ev.target.closest('[data-h]');if(!b)return;
+          const hh=+b.dataset.h;headSel[key]=headSel[key]===hh?null:hh;
+          selL=i;selBi=bi;paint();};
+      }else if(xb&&!hn.length)xb.innerHTML='<div class="note">no per-head data in this frame</div>';
+    }},
+  conv:{
+    label:T=>`C ⌇ ${T.subkind||'conv'}`,cls:()=>'dashed',
+    expand:(i,bi)=>`<h3 id="xh-${i}-${bi}"></h3>
+      <div class="note">gated short-convolution mixer — no attention matrix. Output norm tracked live.</div>`,
+    paint(i,bi,T,f){setText(`xh-${i}-${bi}`,`conv mixer · ‖out‖ ${fBlock(f,i,bi).norm.toFixed(2)}`);}},
+  ssm:{
+    label:T=>`S ∿ ${T.subkind||'ssm'}`,cls:()=>'dotted',
+    expand:(i,bi)=>`<h3 id="xh-${i}-${bi}"></h3>
+      <div class="note" style="margin-bottom:3px">selectivity Δ per token — hot = state absorbs token ("read"), dark = state held ("skip"). The SSM analog of an attention map.</div>
+      <canvas id="xs-${i}-${bi}" height="26" style="cursor:crosshair"></canvas>
+      <div class="note" style="margin:6px 0 3px">Δ across channels · current token</div>
+      <canvas id="xd-${i}-${bi}" height="46"></canvas>
+      <div id="xb-${i}-${bi}" style="margin-top:6px"></div>`,
+    paint(i,bi,T,f){
+      const B=fBlock(f,i,bi);
+      setText(`xh-${i}-${bi}`,`ssm mixer · ‖out‖ ${B.norm.toFixed(2)}${B.state_norm!=null?' · ‖state‖ '+B.state_norm.toFixed(2):''}${B.decay!=null?' · decay '+B.decay.toFixed(2):''}`);
+      // selectivity strip over all tokens
+      const sv=document.getElementById(`xs-${i}-${bi}`);
+      if(sv){
+        const W=sv.parentElement.clientWidth-20;sv.width=W;
+        const c=sv.getContext('2d');
+        c.fillStyle='#0F1B2A';c.fillRect(0,0,W,26);
+        const series=frames.map(fr=>{const b=fBlock(fr,i,bi);return b.delta_mean;});
+        if(series.some(v=>v!=null)){
+          const cw=W/Math.max(series.length,1);
+          series.forEach((v,t)=>{c.fillStyle=mapHeat(v??0);
+            c.fillRect(t*cw,0,Math.ceil(cw),26);});
+          const cur=selT===-1?frames.length-1:selT;
+          c.strokeStyle='#FFFFFF';c.strokeRect(cur*cw,0,cw,26);
+          sv.onclick=ev=>{
+            const r=sv.getBoundingClientRect();
+            const t=Math.min(frames.length-1,Math.floor((ev.clientX-r.left)/r.width*series.length));
+            selT=(t===frames.length-1)?-1:t;paint();};
+        }else{
+          c.fillStyle='#6B7A8C';c.font='10px monospace';
+          c.fillText('Δ not captured — hook dt_proj (see server.py)',6,17);
+        }
+      }
+      // per-channel Δ histogram for current token
+      const dv=document.getElementById(`xd-${i}-${bi}`);
+      if(dv){
+        const W=dv.parentElement.clientWidth-20;dv.width=W;
+        const c=dv.getContext('2d');c.clearRect(0,0,W,46);
+        if(B.delta&&B.delta.length){
+          const bw=W/B.delta.length;
+          B.delta.forEach((v,k)=>{c.fillStyle=heat(v);
+            c.fillRect(k*bw+1,44-40*v,bw-2,40*v);});
+          c.strokeStyle='#C9D2DB';c.strokeRect(0,0,W,45);
+        }else{c.fillStyle='#6B7A8C';c.font='10px monospace';
+          c.fillText('no per-channel Δ in this frame',6,26);}
+      }
+      const xb=document.getElementById(`xb-${i}-${bi}`);
+      xb&&(xb.innerHTML=kvDump(B,['norm','delta','delta_mean','state_norm','decay','heads']));
+    }},
+  moe:{
+    label:T=>`MoE ${T.experts}e`,cls:()=>'',
+    expand(i,bi,T){return `<h3 id="xh-${i}-${bi}"></h3>
+      <svg id="xf-${i}-${bi}" viewBox="0 0 ${flowW(T.experts)} ${flowH(T.experts)}">${flowSvg(i,bi,T)}</svg>`;},
+    paint(i,bi,T,f){paintFlow(i,bi,T,f);}},
+  mlp:{
+    label:()=>'MLP',cls:()=>'',
+    expand(i,bi){
+      if(dataReal)return `<h3 id="xh-${i}-${bi}"></h3><div class="note">dense MLP — activation samples not captured (hook act_fn to record).</div>`;
+      return `<h3 id="xh-${i}-${bi}"></h3><canvas id="xc-${i}-${bi}" height="60"></canvas>
+        <div class="note">pre (gray) → post (crimson) GeLU value distribution</div>`;},
+    paint(i,bi,T,f){setText(`xh-${i}-${bi}`,`dense MLP · ‖out‖ ${fBlock(f,i,bi).norm.toFixed(2)}`);
+      const cv=document.getElementById(`xc-${i}-${bi}`);cv&&drawHist(cv,f.t,i);}},
+  default:{
+    label:T=>T.kind,cls:()=>'dotted',
+    expand:(i,bi)=>`<h3 id="xh-${i}-${bi}"></h3><div id="xb-${i}-${bi}"></div>
+      <div class="note">unknown block kind — showing raw per-token metrics</div>`,
+    paint(i,bi,T,f){const B=fBlock(f,i,bi);
+      setText(`xh-${i}-${bi}`,`${T.kind} · ‖out‖ ${(B.norm||0).toFixed(2)}`);
+      const xb=document.getElementById(`xb-${i}-${bi}`);
+      xb&&(xb.innerHTML=kvDump(B,[]));}},
+};
+function reg(kind){return REG[kind]||REG.default;}
+function setText(id,t){const el=document.getElementById(id);el&&(el.textContent=t);}
+function kvDump(obj,skip){
+  return Object.entries(obj).filter(([k,v])=>!skip.includes(k))
+    .map(([k,v])=>`<div class="kv"><span>${k}</span><span>${
+      Array.isArray(v)?(v.length+' values'):(typeof v==='number'?v.toFixed(4):String(v).slice(0,40))
+    }</span></div>`).join('')||'<div class="note">no metrics</div>';
+}
+
+// GeLU mock histogram --------------------------------------------------------
+function gelu(x){return 0.5*x*(1+Math.tanh(0.7978845608*(x+0.044715*x*x*x)));}
+function drawHist(cv,t,i){
+  const rnd=subRng(t,i,13),pre=[];
+  for(let k=0;k<96;k++){let g=0;for(let j=0;j<6;j++)g+=rnd();pre.push((g-3)*1.6-0.3);}
+  const post=pre.map(gelu);
+  const W=cv.parentElement.clientWidth-20;cv.width=W;const H=cv.height;
+  const c=cv.getContext('2d');c.clearRect(0,0,W,H);
+  const B=24,lo=-4,hi=4,bw=W/B;
+  const bins=v=>{const b=new Array(B).fill(0);
+    v.forEach(x=>{const j=Math.max(0,Math.min(B-1,Math.floor((x-lo)/(hi-lo)*B)));b[j]++;});return b;};
+  const bp=bins(pre),bq=bins(post),mh=Math.max(...bp,...bq,1);
+  bp.forEach((v,j)=>{c.fillStyle='rgba(107,122,140,.45)';c.fillRect(j*bw,H-2-(H-8)*v/mh,bw-1,(H-8)*v/mh);});
+  bq.forEach((v,j)=>{c.fillStyle='rgba(176,46,60,.75)';c.fillRect(j*bw+1,H-2-(H-8)*v/mh,bw-3,(H-8)*v/mh);});
+  c.strokeStyle='#C9D2DB';c.beginPath();c.moveTo(W/2,0);c.lineTo(W/2,H);c.stroke();
+}
+
+// generic MoE flow -----------------------------------------------------------
+const EX_W=92,EX_H=26,EX_DY=60,EX_Y0=44;
+function flowCols(E){return Math.ceil(Math.min(E,32)/8);}
+function flowW(E){return 250+flowCols(E)*134+120;}
+function flowH(E){return Math.max(560,EX_Y0+Math.min(E,8)*EX_DY+40);}
+function expertPos(e,E){const col=Math.floor(e/8);
+  return {x:336+col*134,y:EX_Y0+(e%8)*EX_DY};}
+function flowSvg(i,bi,T){
+  const p=`f${i}x${bi}`,E=Math.min(T.experts,32),FW=flowW(T.experts);
+  const midY=Math.round(flowH(T.experts)/2);
+  let s='';
+  s+=`<rect class="fbox" x="16" y="${midY-17}" width="86" height="34" rx="4"/>`;
+  s+=`<text class="flbl" x="59" y="${midY-3}" text-anchor="middle">token</text>`;
+  s+=`<text class="flbl" id="${p}-token" x="59" y="${midY+10}" text-anchor="middle" font-weight="600">·</text>`;
+  s+=`<path class="fedge" d="M102,${midY} L128,${midY}" stroke-width="2"/>`;
+  s+=`<rect class="fbox" x="130" y="${midY-61}" width="120" height="122" rx="4"/>`;
+  s+=`<text class="flbl" x="190" y="${midY-46}" text-anchor="middle">router · softmax</text>`;
+  for(let e=0;e<E;e++)
+    s+=`<rect id="${p}-rb-${e}" x="${137+e*(106/E)}" y="${midY+49}" width="${Math.max(2,90/E)}" height="2" fill="var(--heat1)"/>`;
+  for(let e=0;e<E;e++){
+    const q=expertPos(e,E);
+    s+=`<path id="${p}-ee-${e}" class="fedge" d="M250,${midY} C300,${midY} ${q.x-46},${q.y+EX_H/2} ${q.x},${q.y+EX_H/2}"/>`;
+    s+=`<rect id="${p}-eb-${e}" class="fbox pick" x="${q.x}" y="${q.y}" width="${EX_W}" height="${EX_H}" rx="4" data-e="${e}"/>`;
+    s+=`<text class="flbl" x="${q.x+8}" y="${q.y+17}" pointer-events="none">E${String(e).padStart(2,'0')}</text>`;
+    s+=`<text class="fmut" id="${p}-ew-${e}" x="${q.x+EX_W-8}" y="${q.y+17}" text-anchor="end" pointer-events="none"></text>`;
+    s+=`<path id="${p}-es-${e}" class="fedge" d="M${q.x+EX_W},${q.y+EX_H/2} C${q.x+EX_W+40},${q.y+EX_H/2} ${FW-104},${midY-7} ${FW-82},${midY}"/>`;
+  }
+  if(T.experts>32)s+=`<text class="fmut" x="336" y="${flowH(T.experts)-8}">showing first 32 of ${T.experts} experts</text>`;
+  s+=`<circle class="fbox" cx="${FW-68}" cy="${midY}" r="16"/>`;
+  s+=`<text class="flbl" x="${FW-68}" y="${midY+4}" text-anchor="middle">Σ</text>`;
+  s+=`<path class="fedge" d="M${FW-52},${midY} L${FW-32},${midY}" stroke-width="2"/>`;
+  s+=`<text class="fmut" id="${p}-out" x="${FW-32}" y="${midY-14}" text-anchor="end"></text>`;
+  s+=`<text class="fmut" x="${FW-32}" y="${midY+15}" text-anchor="end">→ resid</text>`;
+  return s;
+}
+function paintFlow(i,bi,T,f){
+  const p=`f${i}x${bi}`,B=fBlock(f,i,bi);
+  if(!B.router)return;
+  setText(`xh-${i}-${bi}`,`router flow · top-${T.topk} of ${T.experts} · t=${f.t} "${f.text}" · click an expert to drill`);
+  setText(`${p}-token`,f.text.slice(0,9));
+  const top=new Set((B.top||[]).map(([e])=>e));
+  const mx=Math.max(...B.router,1e-9),E=Math.min(T.experts,32);
+  for(let e=0;e<E;e++){
+    const pr=B.router[e]||0,hot=top.has(e);
+    const rb=document.getElementById(`${p}-rb-${e}`);
+    if(rb){const h=Math.max(2,90*pr/mx);rb.setAttribute('height',h);rb.setAttribute('y',+rb.dataset.base||rb.getAttribute('y'));
+      rb.setAttribute('y',(+(rb.dataset.base||(rb.dataset.base=rb.getAttribute('y'))))+2-h);}
+    [document.getElementById(`${p}-ee-${e}`),document.getElementById(`${p}-es-${e}`)].forEach(el=>{
+      if(!el)return;el.classList.toggle('hot',hot);
+      el.setAttribute('stroke-width',(0.5+9*pr).toFixed(2));
+      el.setAttribute('stroke-opacity',(hot?0.95:0.15+0.5*pr/mx).toFixed(2));});
+    const eb=document.getElementById(`${p}-eb-${e}`);
+    if(eb){eb.style.fill=hot?heat(0.35+0.65*pr):'#FFFFFF';
+      eb.classList.toggle('on',selL===i&&selExpert===e);}
+    setText(`${p}-ew-${e}`,hot?(100*pr).toFixed(1)+'%':'');
+  }
+  setText(`${p}-out`,'‖out‖ '+B.norm.toFixed(2));
+}
+
+// ═══════════════════════════════ stack ═════════════════════════════════════
+function buildStack(){
+  const el=document.getElementById('stack');
+  el.innerHTML=topo.layers.map(T=>{
+    const cards=T.blocks.map((b,bi)=>{
+      const R=reg(b.kind);
+      const chips=b.kind==='moe'
+        ?`<span class="chips">${[...Array(Math.min(b.experts,16))].map((_,e)=>
+            `<span class="chip" id="chp-${T.i}-${bi}-${e}"></span>`).join('')}</span>`:'';
+      return `<div class="bcard ${R.cls(b)}" id="bc-${T.i}-${bi}" data-i="${T.i}" data-bi="${bi}">
+        <span>${R.label(b)}</span>${chips}<span class="bn" id="bn-${T.i}-${bi}"></span></div>`;
+    }).join(`<div class="seg" id="seg-${T.i}"></div>`);
+    // seg between first and second card; if 1 block, append seg
+    const exps=T.blocks.map((b,bi)=>`<div class="lexp" id="x-${T.i}-${bi}" hidden></div>`).join('');
+    return `<div class="lrow"><div class="lhead">
+      <span class="llab">L${String(T.i).padStart(2,'0')}</span>${cards}
+      ${T.blocks.length<2?`<div class="seg" id="seg-${T.i}"></div>`:''}
+    </div>${exps}</div>`;
+  }).join('');
+  el.onclick=ev=>{
+    const card=ev.target.closest('[data-bi]');
+    if(!card)return;
+    const i=+card.dataset.i,bi=+card.dataset.bi;
+    selL=i;selBi=bi;
+    toggleExp(i,bi);
+    paint();
+  };
+}
+function toggleExp(i,bi){
+  const key=`${i}:${bi}`,box=document.getElementById(`x-${i}-${bi}`);
+  if(expOpen.has(key)){expOpen.delete(key);box.hidden=true;
+    if(selL===i)selBi=null;
+    return;}
+  expOpen.add(key);box.hidden=false;
+  const T=topo.layers[i].blocks[bi];
+  box.innerHTML=reg(T.kind).expand(i,bi,T);
+  const svg=document.getElementById(`xf-${i}-${bi}`);
+  svg&&(svg.onclick=ev=>{
+    const e=ev.target.dataset?.e;
+    if(e===undefined)return;
+    selL=i;selBi=bi;
+    selExpert=selExpert===+e?null:+e;
+    paint();
+  });
+}
+
+// ═══════════════════════════════ raster ════════════════════════════════════
+function lastBlockNorm(f,i){                    // channel-mixer norm for raster
+  const bs=topo.layers[i].blocks;
+  return fBlock(f,i,bs.length-1).norm||0;
+}
+function paintRaster(){
+  const cv=document.getElementById('raster');
+  const W=cv.parentElement.clientWidth-24;cv.width=W;
+  const c=cv.getContext('2d');
+  c.fillStyle='#0F1B2A';c.fillRect(0,0,W,150);
+  const N=nLayers(),cols=Math.max(frames.length,maxTok);
+  const cw=W/cols,ch=150/N;
+  const rowmax=[...Array(N)].map((_,i)=>
+    Math.max(...frames.map(f=>lastBlockNorm(f,i)),1e-9));
+  frames.forEach((f,t)=>{for(let i=0;i<N;i++){
+    c.fillStyle=mapHeat(lastBlockNorm(f,i)/rowmax[i]);
+    c.fillRect(t*cw,i*ch,Math.ceil(cw),Math.ceil(ch));}});
+  const t=selT===-1?frames.length-1:selT;
+  c.strokeStyle='#FFFFFF';c.lineWidth=1;
+  c.strokeRect(t*cw,0,cw,150);
+  c.strokeRect(0,selL*ch,W,ch);
+  cv.onclick=ev=>{
+    const r=cv.getBoundingClientRect();
+    const t2=Math.floor((ev.clientX-r.left)/r.width*cols);
+    const l2=Math.floor((ev.clientY-r.top)/r.height*N);
+    if(t2<frames.length){selT=(t2===frames.length-1)?-1:t2;}
+    selL=Math.max(0,Math.min(N-1,l2));
+    selBi=null;selExpert=null;
+    paint();
+  };
+}
+
+// ═══════════════════════════════ painters ══════════════════════════════════
+function paintRows(f){
+  topo.layers.forEach(T=>{
+    const i=T.i;
+    T.blocks.forEach((b,bi)=>{
+      const B=fBlock(f,i,bi);
+      const bc=document.getElementById(`bc-${i}-${bi}`);
+      if(bc){bc.style.background=heat(norm(`${i}:${bi}`,B.norm||0));
+        bc.classList.toggle('open',expOpen.has(`${i}:${bi}`));}
+      setText(`bn-${i}-${bi}`,(B.norm||0).toFixed(1));
+      if(b.kind==='moe'&&B.top){
+        for(let e=0;e<Math.min(b.experts,16);e++){
+          const el=document.getElementById(`chp-${i}-${bi}-${e}`);
+          el&&(el.style.background='#fff');}
+        B.top.forEach(([e,w])=>{
+          const el=document.getElementById(`chp-${i}-${bi}-${e}`);
+          el&&(el.style.background=heat(0.3+0.7*w));});
+      }
+    });
+    const sg=document.getElementById('seg-'+i);
+    if(sg){const v=norm('resid'+i,f.layers[i].resid||0);
+      sg.style.background=heat(0.15+0.85*v);
+      sg.style.width=(5+6*v).toFixed(1)+'px';}
+  });
+  expOpen.forEach(key=>{
+    const [i,bi]=key.split(':').map(Number);
+    const T=topo.layers[i].blocks[bi];
+    reg(T.kind).paint(i,bi,T,f);
+  });
+}
+
+function paintRight(f){
+  // multi-block sparkline for selected layer
+  const bs=topo.layers[selL].blocks;
+  document.getElementById('sparkh').textContent=`L${selL} block norms over tokens`;
+  const cols=['#6B7A8C','#B02E3C','#E39B2D','#3E7C4F'];
+  const sc=document.getElementById('spark');const SW=sc.parentElement.clientWidth-24;sc.width=SW;
+  const c=sc.getContext('2d');c.clearRect(0,0,SW,70);
+  bs.forEach((b,bi)=>{
+    const series=frames.map(fr=>fBlock(fr,selL,bi).norm||0);
+    const mx=Math.max(...series,1e-9);
+    c.strokeStyle=cols[bi%cols.length];c.lineWidth=1.4;c.beginPath();
+    series.forEach((v,k)=>{const x=k/Math.max(series.length-1,1)*(SW-2)+1,y=68-(v/mx)*62;
+      k?c.lineTo(x,y):c.moveTo(x,y);});
+    c.stroke();});
+  document.getElementById('sparkleg').innerHTML=
+    bs.map((b,bi)=>`<span style="color:${cols[bi%cols.length]}">■</span> ${reg(b.kind).label(b)}`).join(' · ');
+  // expert utilization for the selected layer's moe block (if any)
+  const uc=document.getElementById('utilcard');
+  const mbi=moeAt(selL);
+  if(mbi==null){uc.style.display='none';return;}
+  uc.style.display='';
+  const T=topo.layers[selL].blocks[mbi],E=T.experts;
+  const uh=uc.querySelector('h2'),unote=uc.querySelector('.note');
+  const uv=document.getElementById('util');const UW=uv.parentElement.clientWidth-24;uv.width=UW;
+  const uctx=uv.getContext('2d');uctx.clearRect(0,0,UW,80);
+  const row=(util[selL]=util[selL]||new Array(E).fill(0));
+  if(selExpert!=null){
+    const series=frames.map(fr=>{const B=fBlock(fr,selL,mbi);return B.router?B.router[selExpert]||0:0;});
+    const inTop=frames.reduce((a,fr)=>a+((fBlock(fr,selL,mbi).top||[]).some(([e])=>e===selExpert)),0);
+    const share=row[selExpert]/(row.reduce((a,b)=>a+b,0)||1);
+    uh.textContent=`expert E${String(selExpert).padStart(2,'0')} · L${selL}`;
+    unote.textContent=`router weight per token · top-${T.topk} in ${inTop}/${frames.length} tokens · ${(100*share).toFixed(1)}% of mass · click to go back`;
+    const mx=Math.max(...series,1e-9);
+    uctx.strokeStyle='#B02E3C';uctx.lineWidth=1.5;uctx.beginPath();
+    series.forEach((v,k)=>{const x=k/Math.max(series.length-1,1)*(UW-2)+1,y=76-(v/mx)*70;
+      k?uctx.lineTo(x,y):uctx.moveTo(x,y);});
+    uctx.stroke();
+    uv.onclick=()=>{selExpert=null;paint();};
+    return;
+  }
+  uh.textContent=`expert utilization · L${selL} · ${E} experts`;
+  unote.textContent='share of routing mass per expert · click a bar to drill in';
+  const bw=UW/E,mu=Math.max(...row,1e-9);
+  row.forEach((v,e)=>{
+    uctx.fillStyle=heat(0.25+0.75*v/mu);
+    const h=68*v/mu;uctx.fillRect(e*bw+1,70-h,bw-2,h);
+    if(E<=32){uctx.fillStyle='#6B7A8C';uctx.font='8px monospace';
+      uctx.fillText(String(e),e*bw+bw/2-3,79);}});
+  uv.onclick=ev=>{
+    const r=uv.getBoundingClientRect();
+    selExpert=Math.max(0,Math.min(E-1,Math.floor((ev.clientX-r.left)/r.width*E)));
+    paint();
+  };
+}
+
+function paintTokens(){
+  const el=document.getElementById('tokens');
+  el.innerHTML=frames.map((f,i)=>
+    `<span class="tok ${(selT===-1?i===frames.length-1:i===selT)?'sel':''}" data-t="${i}">${f.text}</span>`).join('');
+  if(selT===-1)el.scrollLeft=el.scrollWidth;
+}
+document.getElementById('tokens').onclick=ev=>{
+  const t=ev.target.dataset?.t;if(t===undefined)return;
+  selT=(+t===frames.length-1)?-1:+t;paint();
+};
+
+function paintCrumb(f){
+  const c=document.getElementById('crumb');
+  let s=`<a data-nav="run">run</a><span class="sep">›</span>`;
+  s+=selBi!=null?`<a data-nav="layer">L${selL}</a>`:`<span class="leaf">L${selL}</span>`;
+  if(selBi!=null){
+    const T=topo.layers[selL].blocks[selBi];
+    const lbl=reg(T.kind).label(T);
+    const part=T.kind==='attention'&&headSel[`${selL}:${selBi}`]!=null
+      ?'h'+headSel[`${selL}:${selBi}`]
+      :T.kind==='moe'&&selExpert!=null?'E'+selExpert:null;
+    s+=`<span class="sep">›</span>`;
+    s+=part?`<a data-nav="block">${lbl}</a><span class="sep">›</span><span class="leaf">${part}</span>`
+           :`<span class="leaf">${lbl}</span>`;
+  }
+  s+=`<span class="sep">·</span><span style="color:var(--muted)">t=${f.t}${selT===-1?' live':''}</span>`;
+  c.innerHTML=s;
+  c.onclick=ev=>{
+    const nav=ev.target.dataset?.nav;if(!nav)return;
+    if(nav==='run'){selBi=null;selExpert=null;selT=-1;paint();}
+    else if(nav==='layer'){selBi=null;selExpert=null;paint();}
+    else if(nav==='block'){headSel[`${selL}:${selBi}`]=null;selExpert=null;paint();}
+  };
+}
+
+function paint(){
+  const f=frame();if(!topo||!f)return;
+  document.getElementById('stat').textContent=
+    `${topo.model} · ${nLayers()}L · t=${f.t}${selT===-1?' (live)':''}${dataReal?' · real data':''}`;
+  paintRows(f);paintRaster();paintRight(f);paintTokens();paintCrumb(f);
+}
+
+// ═══════════════════════════════ loop ══════════════════════════════════════
+let extTopo=null,extTokens=null,extDone=false;
+
+function accumUtil(f){
+  topo.layers.forEach((T,i)=>{
+    const mbi=moeAt(i);if(mbi==null)return;
+    const B=fBlock(f,i,mbi);if(!B.top)return;
+    const row=(util[i]=util[i]||new Array(T.blocks[mbi].experts).fill(0));
+    B.top.forEach(([e,w])=>{if(row[e]!=null)row[e]+=w;});
+  });
+}
+
+function commonStart(){
+  frames=[];queue=[];selT=-1;runMax={};util={};
+  selBi=null;selExpert=null;
+  expOpen.clear();
+  for(const k in headSel)delete headSel[k];
+  buildStack();
+  playing=true;document.getElementById('btn-play').textContent='⏸';
+}
+function reset(){
+  mode='mock';dataReal=false;maxTok=MAXTOK;
+  if(ws){try{ws.close();}catch(e){}ws=null;}
+  sim=makeSim(preset);topo=sim.topo;
+  selL=Math.floor(nLayers()/2);
+  commonStart();
+  const f=sim.next();
+  if(f){accumUtil(f);frames.push(f);paint();}
+}
+function startExternal(topoMsg,label){
+  mode=label;dataReal=true;sim=null;extDone=false;
+  topo=normTopo(topoMsg);
+  selL=Math.floor(nLayers()/2);
+  commonStart();
+}
+function loadTraceText(text){
+  const msgs=text.split('\n').filter(l=>l.trim()).map(l=>JSON.parse(l));
+  const topoMsg=msgs.find(m=>m.type==='topology');
+  if(!topoMsg){alert('no topology message in trace');return;}
+  extTopo=topoMsg;
+  extTokens=msgs.filter(m=>m.type==='token').map(normFrame);
+  maxTok=extTokens.length;
+  startExternal(topoMsg,'trace');
+  queue=[...extTokens];extDone=true;
+}
+function connectWs(){
+  ws=new WebSocket(location.protocol==='https:'
+    ?`wss://${location.host}/ws`:'ws://localhost:8765');
+  ws.onmessage=ev=>{
+    const m=JSON.parse(ev.data);
+    if(m.type==='topology'){maxTok=32;startExternal(m,'ws');}
+    else if(m.type==='token'){queue.push(normFrame(m));maxTok=Math.max(maxTok,frames.length+queue.length);}
+    else if(m.type==='done'){extDone=true;}
+  };
+  ws.onerror=()=>{document.getElementById('stat').textContent=
+    'ws://localhost:8765 unreachable — is server.py/replay.py running?';};
+}
+setInterval(()=>{
+  if(!playing)return;
+  let f=null;
+  if(mode==='mock'){if(sim)f=sim.next();}
+  else if(queue.length)f=queue.shift();
+  if(f){accumUtil(f);frames.push(f);paint();}
+  else if(mode==='mock'?(frames.length>=MAXTOK):(extDone&&frames.length>0)){
+    playing=false;document.getElementById('btn-play').textContent='▶';}
+},280);
+
+document.getElementById('btn-play').onclick=e=>{
+  if(!playing&&mode==='trace'&&queue.length===0&&extTokens){
+    startExternal(extTopo,'trace');queue=[...extTokens];extDone=true;}
+  else if(!playing&&mode==='mock'&&frames.length>=MAXTOK){reset();}
+  else{playing=!playing;
+    e.target.textContent=playing?'⏸':'▶';}
+};
+document.getElementById('btn-seed').onclick=()=>{
+  seed=Math.floor(Math.random()*1e6);reset();};
+document.getElementById('preset').onchange=ev=>{preset=ev.target.value;reset();};
+document.getElementById('btn-load').onclick=()=>document.getElementById('filein').click();
+document.getElementById('filein').onchange=ev=>{
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>loadTraceText(r.result);
+  r.readAsText(f);
+};
+document.getElementById('btn-ws').onclick=()=>connectWs();
+window.addEventListener('resize',()=>paint());
+reset();
+
+// deep link from the chat cut-out: /dashboard?ws=1&layer=8&block=0&t=14
+// auto-connects (the api_server hub replays the last run), unfolds the
+// requested layer/block once topology lands, then seeks the token.
+const qp=new URLSearchParams(location.search);
+if(qp.has('ws')){
+  connectWs();
+  const Lq=qp.has('layer')?+qp.get('layer'):null,
+        Bq=+(qp.get('block')||0),
+        Tq=qp.has('t')?+qp.get('t'):null;
+  let opened=false;
+  const tick=setInterval(()=>{
+    if(mode!=='ws'||!topo)return;
+    if(!opened&&Lq!==null&&topo.layers[Lq]){
+      opened=true;
+      selL=Lq;selBi=Bq;
+      if(!expOpen.has(`${Lq}:${Bq}`))toggleExp(Lq,Bq);
+      paint();
+      document.getElementById(`x-${Lq}-${Bq}`)
+        ?.scrollIntoView({block:'center',behavior:'smooth'});
+    }
+    if(Tq!==null&&frames.length>Tq){
+      selT=Tq;paint();clearInterval(tick);
+    }else if(Tq===null&&(opened||Lq===null))clearInterval(tick);
+  },350);
+  setTimeout(()=>clearInterval(tick),60000);
+}
+</script>
+</body>
+</html>

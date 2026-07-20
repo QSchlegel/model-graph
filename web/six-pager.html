@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>model-graph · six-pager</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='5' y='5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='13.5' y='5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='5' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='5' y='13.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='13.5' y='13.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='13.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='5' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='13.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='17' r='3.1' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat1:#E39B2D; --heat2:#B02E3C; --ctxc:#3E7CA8;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{background:var(--paper);color:var(--ink);font:14px/1.65 var(--mono)}
+  a{color:var(--ink)}
+  header{display:flex;gap:12px;align-items:center;padding:10px 18px;
+         border-bottom:1px solid rgba(255,255,255,.6);
+         background:rgba(255,255,255,.6);position:sticky;top:0;z-index:5;
+         -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;
+         font-size:15px;text-decoration:none;white-space:nowrap}
+  .brand svg{width:22px;height:22px;display:block}
+  header .acts{margin-left:auto;display:flex;gap:8px}
+  .btn{font:12.5px var(--mono);padding:7px 12px;border:1.5px solid var(--ink);
+       border-radius:6px;background:rgba(255,255,255,.7);cursor:pointer;
+       text-decoration:none;color:var(--ink)}
+  .btn.primary{background:var(--ink);color:var(--panel)}
+  .btn:hover{background:var(--heat1);color:var(--ink)}
+  main{max-width:820px;margin:0 auto;padding:40px 22px 80px}
+  .doc{background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.7);
+       border-radius:16px;padding:42px 46px;
+       box-shadow:0 14px 44px rgba(34,52,74,.12);
+       -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+  h1{font-size:27px;line-height:1.25;margin-bottom:4px}
+  .sub{color:var(--muted);margin-bottom:30px}
+  h2{font-size:16px;margin:34px 0 10px;padding-top:14px;
+     border-top:1px solid var(--line)}
+  h2 span{color:var(--heat2);margin-right:8px}
+  p{margin:10px 0}
+  ol,ul{margin:10px 0 10px 22px}
+  li{margin:6px 0}
+  b{color:var(--ink)}
+  .tenet b{color:var(--heat2)}
+  em{color:var(--muted);font-style:italic}
+  @media (max-width:640px){.doc{padding:26px 20px}}
+  @media print{
+    header{display:none}
+    body{background:#fff}
+    main{padding:0;max-width:none}
+    .doc{background:#fff;border:0;box-shadow:none;border-radius:0;
+         padding:0;-webkit-backdrop-filter:none;backdrop-filter:none}
+    h2{break-inside:avoid}
+  }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">
+    <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="5" y="5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="13.5" y="5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="5" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="5" y="13.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="13.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="5" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="13.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="17" r="3.1" fill="none" stroke="#FFF" stroke-width="1.6"/></svg>
+    model-graph · six-pager
+  </a>
+  <div class="acts">
+    <a class="btn primary"
+       href="https://github.com/QSchlegel/model-graph/raw/main/docs/model-graph-six-pager.pdf"
+       download>Download PDF</a>
+    <button class="btn" onclick="window.print()">Print</button>
+  </div>
+</header>
+<main><div class="doc">
+  <h1>model-graph — an open window into a running language model</h1>
+  <div class="sub">Open-source product six-pager · July 2026 ·
+    github.com/QSchlegel/model-graph</div>
+
+  <h2><span>1</span>The problem</h2>
+  <p>Language models are the most-watched black boxes in software.
+  Developers ship agents that call tools, reason through chains, and read
+  images — and when one goes wrong, the only observable artifact is text.
+  Did the model not <em>know</em>? Not <em>look at</em> the right part of
+  the prompt? Commit to a wrong answer early, or waver until the last
+  layer? Today that question sends you to offline interpretability stacks:
+  notebook-bound, research-oriented, hours-per-question tools built for
+  papers, not for the loop developers actually live in — <em>send a
+  prompt, watch what happens, change something, send again.</em></p>
+  <p>The gap is not capability, it's <b>product</b>: model internals are
+  cheap to capture (a dozen forward hooks) and cheap to render (a canvas),
+  but nobody packaged them into the tool you'd reach for the way you reach
+  for browser devtools.</p>
+
+  <h2><span>2</span>Tenets</h2>
+  <ol class="tenet">
+    <li><b>Live-first.</b> Internals stream <em>during</em> generation,
+      token by token — not post-hoc analysis of a saved run.</li>
+    <li><b>Honest pixels.</b> Nothing is rendered that wasn't measured.
+      Missing data says so, on the canvas, never faked.</li>
+    <li><b>Zero-friction adoption.</b> One process, OpenAI-compatible —
+      anything that speaks the OpenAI API gets instrumented for free.
+      A mock mode runs the full UI with no GPU and no weights.</li>
+    <li><b>Everything is testable.</b> Observability that can't gate a CI
+      run is a demo. Every run is recorded; internals carry assertions.</li>
+    <li><b>Tiny models are the lab.</b> Sub-2B models load in seconds and
+      exhibit the same phenomena worth studying — attention sinks, settle
+      depth, routing collapse, tool-call failures.</li>
+  </ol>
+
+  <h2><span>3</span>The product</h2>
+  <p><b>model-graph</b> is a self-hosted inspector with three faces on one
+  process:</p>
+  <ul>
+    <li><b>The chat</b> — a chat window whose <em>background is the
+      visualization</em>: layers × tokens heatmaps (MLP / attention /
+      residual writes, per-head fingerprint cells), a logit-lens layer
+      that dots every point where the model's prediction changes with
+      depth (red = where it settles on the final token), per-token
+      uncertainty, attention arcs showing where the selected token
+      looked, and a 3D residual trajectory with the full prompt context
+      as a linked trace. Click anything for a dashboard-grade cut-out;
+      arrow keys walk cells; touch-ready.</li>
+    <li><b>The dashboard</b> — block-registry drill-down (run › layer ›
+      block › part): head panels, MoE router flow and expert utilization,
+      SSM Δ, trace replay, deep-linkable from the chat's cut-outs.</li>
+    <li><b>The API</b> — OpenAI-compatible <code>/v1/chat/completions</code>
+      with streaming, tool calling (parsed into spec-compliant
+      <code>tool_calls</code>), and multimodal image parts — vision-language
+      chats are fully instrumented.</li>
+  </ul>
+  <p>Underneath: a websocket protocol any client can consume, a
+  <b>curator</b> that records every run and gates CI with checks and
+  tool-reasoning suites, and an <b>observable-ONNX</b> pipeline that
+  graph-surgeries residual streams into declared outputs — so even the
+  in-browser WebGPU engine shows real per-layer activity, serverless.</p>
+
+  <h2><span>4</span>Customer experience</h2>
+  <p><b>The agent developer.</b> Maria's agent calls the wrong tool once
+  in twenty runs. She points her existing OpenAI-SDK agent at
+  model-graph's base URL — zero code change — and reruns. The failing case
+  is auto-recorded; the strip shows the call token with 1.9 bits of
+  entropy and attention parked on the system-prompt sink instead of the
+  user's constraint. She adds the case to a curator suite with a
+  should-call assertion, tightens the tool description, and the suite
+  runs in CI from then on.</p>
+  <p><b>The interpretability tinkerer.</b> Kai wants to <em>see</em> logit
+  lens, not read about it. He asks "why is the sky blue" and watches the
+  ladder: garbage → 盐 → "salinity" → …settles on " because" at L10. He
+  drags the residual trajectory, finds the <code>&lt;|im_start|&gt;</code>
+  outlier, and has attention-sink intuition in an afternoon.</p>
+  <p><b>The educator.</b> A transformers lecture runs live on a
+  projector: type a prompt, watch conv and attention layers divide labour
+  in a hybrid model, click a head-fingerprint cell. Mock mode makes the
+  demo work on the podium laptop.</p>
+  <p><b>The evaluator.</b> A team comparing tiny models runs the same
+  reasoning suites across LFM2.5, SmolLM2 and Qwen3.5, diffing not just
+  accuracy but settle depth, uncertainty and attention focus — internals
+  as evaluation metrics, with regression pinning between checkpoints.</p>
+
+  <h2><span>5</span>How it works (and what it costs)</h2>
+  <p>A <code>HookedModel</code> wraps any HF causal or vision-language
+  model with forward hooks (eager attention) and yields one JSON frame per
+  token: block write norms, head norms, router weights, logit lens,
+  attention sources, entropy/margin, and a seeded 3D projection of every
+  residual. The API server fans frames out over a websocket (with last-run
+  replay), records runs, and serves the UIs — one process. In-browser
+  engines run curated ONNX models on WebGPU; the observable export exposes
+  <code>hidden.*</code> outputs so client-side JS computes the same
+  norms/trajectories from real tensors.</p>
+  <p>Cost of honesty: eager attention and per-token capture put
+  instrumented throughput at roughly chat speed (~5 tok/s for a 1.2B model
+  on an M-series laptop) — the right trade for an inspector.</p>
+
+  <h2><span>6</span>Open source plan</h2>
+  <p><b>License &amp; posture.</b> MIT. Single repo, batteries included;
+  no cloud dependency, no telemetry. The docs vault and AGENTS.md make the
+  repo legible to humans and AI agents alike — contributions are expected
+  from both.</p>
+  <p><b>Contribution ladder.</b> Suite cases and curator checks (no ML
+  background needed) → curated browser engines → dashboard consumers for
+  newer signals → observable-export coverage → new architecture
+  support.</p>
+  <p><b>Roadmap.</b> The reasoning program: reasoning suites with
+  internals-based expectations, a curated failure atlas, compare-driven
+  prompt evaluation, and fine-tuning loops gated by the same suites.</p>
+  <p><b>Success looks like:</b> issues that arrive with a run id attached;
+  suites in other projects' CI; a community-grown failure atlas; "point
+  your agent at it" becoming the default first debugging step for local
+  models.</p>
+  <p><b>FAQ.</b> <em>Why not TransformerLens/nnsight?</em> Research
+  libraries — powerful, offline, code-first. model-graph is a product:
+  live, visual, OpenAI-compatible, testable. They compose. <em>Does my
+  model work?</em> Any HF causal LM; hybrid, MoE and VL models are
+  first-class. <em>Do I need a GPU?</em> No — mock mode for the UI, WebGPU
+  browser engines for real inference without Python.</p>
+</div></main>
+</body>
+</html>

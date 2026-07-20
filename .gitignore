@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.venv/
+harness_trace.ndjson
+models/
+runs/
+vault/.obsidian/workspace*
+.DS_Store
