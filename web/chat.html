@@ -229,6 +229,12 @@
        "how much knowledge got injected here". look for: bursts on content
        words vs quiet function words · hot mid-depth rows where recall
        happens · what happens on the eos column.</p>
+    <p class="why"><b>what it teaches:</b> the "MLPs as key→value
+       memories" result (Geva et al. 2021) becomes visible — factual
+       tokens trigger big writes where a lookup fires, function words
+       barely disturb the stream. If a wrong fact is emitted with a big
+       mid-depth MLP write, the model retrieved a wrong memory, not a
+       wrong plan — a genuinely different failure to fix.</p>
   </div>
   <div class="mode" data-m="1">
     <h4>viz: attn · token-mixer write</h4>
@@ -247,6 +253,12 @@
        heads did the work — while the framing border keeps the aggregate
        attn norm, i.e. <i>how much</i> work. hover a panel to identify the
        head; recurring fingerprints across columns = specialised heads.</p>
+    <p class="why"><b>what it teaches:</b> heads specialise. Vertical
+       stripes that recur when text repeats are induction-style behavior
+       (copying earlier patterns forward); a head that fires on almost
+       every token is often just parking attention on the first tokens —
+       the <b>attention sink</b>. Distinguishing "moved information" from
+       "parked attention" is the core skill of reading attention data.</p>
     <p class="why">server runs also capture <b>where</b> each token looked:
        select any A cell and its top attention sources draw as arcs over
        the token strip (blue ◂ = mass on the prompt/context); the cut-out
@@ -264,6 +276,12 @@
        L0 &lt; L15), so the information is in deviations — sudden per-token
        jumps (one layer dominating), unusually flat columns, odd eos
        behaviour.</p>
+    <p class="why"><b>what it teaches:</b> the residual stream is the
+       shared bus every block reads from and writes into — features
+       coexist superposed in the same dimensions. A layer whose write
+       suddenly dominates the stream is where a decision got made;
+       chase it with the lens ladder and the attention arcs on that
+       column.</p>
   </div>
 
   <div class="mode" data-m="3">
@@ -286,6 +304,15 @@
        repeated structure (lists!) · jumps at topic shifts · run starts
        ringed in ink, eos in red · compare early vs late layers (↑/↓) to
        watch depth untangle the space.</p>
+    <p class="why"><b>what it teaches:</b> LM hidden states are famously
+       <b>anisotropic</b> — they occupy a narrow cone, and the cloud's
+       shape shows it. Special tokens (<code>&lt;|im_start|&gt;</code>)
+       sit as huge-norm outliers: attention sinks in embedding form.
+       The step replay (space) shows the path being <i>walked</i>: tight
+       loops = the model cycling similar states (lists, repetition),
+       long jumps = genuine semantic movement. Generation orbiting the
+       context cluster = grounded; drifting far from it can be
+       creativity — or hallucination.</p>
   </div>
 
   <h4>dots · logit-lens flips</h4>
@@ -297,11 +324,23 @@
   <p class="why">why: settle depth is a per-token difficulty meter — echoed
      and grammatical tokens settle early, semantic choices settle late.
      click a cell for the full ladder.</p>
+  <p class="why"><b>what it teaches:</b> depth is compute. If the lens
+     settles at L10 of 16, the last six layers mostly polished an
+     already-made decision — the intuition behind early-exit and
+     speculative decoding. Watch a hard token stay contested to the
+     final layers while an easy one locks in a third of the way down:
+     per-token difficulty, measured rather than guessed.</p>
 
   <h4>token strip</h4>
   <p>the emitted token above each column (red = eos, ↵ = newline). hover
      for the top-5 alternatives — this is the actual sampling distribution,
      so at T=0 the winner saturates; raise T to see real spread.</p>
+  <p class="why"><b>what it teaches:</b> entropy in bits ≈ log₂ of the
+     number of plausible continuations — 1 bit ≈ a coin flip, 0.01 bits
+     ≈ certainty. Entropy spikes mark decision forks; the margin
+     (p₁−p₂) shows decisiveness. On reasoning chains, watch entropy
+     collapse exactly when the evidence token arrives — or fail to,
+     which predicts a shaky answer.</p>
 
   <h4>cut-out panel · click a cell, arrow keys navigate</h4>
   <ul>
@@ -582,8 +621,10 @@ function availableMetrics(){                // which modes have data right now
   if(!av.size)av.add(0);                    // nothing yet → default heatmap
   return av;
 }
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const emb={yaw:.7,pitch:.35,dim:3,layer:null,screen:[],cscreen:[],mmap:[],
-           labels:'auto',ctx:true,zoom:1};
+           labels:'auto',ctx:true,zoom:1,
+           spin:!REDUCED,play:!REDUCED,head:1,visCount:0};
 const cv=$('viz'),ctx=cv.getContext('2d');
 const CW=13,RAIL=40,PAD=8;                  // cell width, left rail, v-padding
 
@@ -840,8 +881,9 @@ function drawEmbed(g){
   ctx.fillText(`embedding trajectory · L${String(L).padStart(2,'0')} residual `+
     `→ fixed random ${emb.dim}d projection · zoom ${emb.zoom.toFixed(1)}×`,
     RAIL,g.top+4);
-  ctx.fillText('drag rotates · wheel/pinch zooms · ↑/↓ or minimap picks '+
-    `layer · d 2d/3d · t labels (${emb.labels}) · c context · `+
+  ctx.fillText(`${emb.play?'▸ replay':'⏸ replay'} (space) · `+
+    `${emb.spin?'↻ spin':'· spin'} (r) · drag rotates · wheel zooms · `+
+    `↑/↓ layer · d 2d/3d · t labels (${emb.labels}) · c context · `+
     'click a point → cut-out',RAIL,g.bot-4);
   const {pts,cpts}=embLayerPts(L);
   emb.screen=[];emb.cscreen=[];emb.mmap=[];
@@ -878,6 +920,15 @@ function drawEmbed(g){
   const S=r=>({x:ox+s*(r.X-cx0),y:oy+s*(r.Y-cy0)});
   emb.screen=rot.map(r=>({...S(r),idx:r.idx,f:r.f}));
   emb.cscreen=crot.map(r=>({...S(r),tok:r.tok,pi:r.pi}));
+  // step replay: reveal the generation up to the playhead (full while
+  // streaming live or inspecting a selection)
+  const total=emb.screen.length;
+  const vis=(emb.play&&!sel&&!busy&&total)
+    ?Math.min(Math.max(1,emb.head),total):total;
+  emb.visCount=vis;
+  ctx.fillStyle='#6B7A8C';
+  if(emb.play&&!sel&&!busy)
+    ctx.fillText(`▸ step ${vis}/${total}`,RAIL,g.top+16);
   ctx.save();                               // clip the plot off the minimap
   ctx.beginPath();ctx.rect(0,g.top+10,g.w-MM-4,g.bot-g.top-22);ctx.clip();
   if(emb.cscreen.length){                   // context trace beneath, in blue
@@ -895,10 +946,10 @@ function drawEmbed(g){
     });
     ctx.lineWidth=1;
   }
-  // path, colored old → new; hops between runs dashed
-  for(let k=1;k<emb.screen.length;k++){
+  // path, colored old → new; hops between runs dashed; bounded by playhead
+  for(let k=1;k<vis;k++){
     const a=emb.screen[k-1],b=emb.screen[k],
-          rec=k/(emb.screen.length-1);
+          rec=k/Math.max(1,vis-1);
     ctx.strokeStyle=heat(.15+.85*rec);
     ctx.lineWidth=.8+1.2*rec;
     if(viz.bounds.has(b.idx))ctx.setLineDash([2,3]);
@@ -906,8 +957,8 @@ function drawEmbed(g){
     ctx.setLineDash([]);
   }
   ctx.lineWidth=1;
-  emb.screen.forEach((q,k)=>{               // token points
-    const rec=k/Math.max(1,emb.screen.length-1);
+  emb.screen.slice(0,vis).forEach((q,k)=>{  // token points up to playhead
+    const rec=k/Math.max(1,vis-1);
     ctx.beginPath();ctx.arc(q.x,q.y,q.f.eos?3.2:2.2,0,7);
     ctx.fillStyle=q.f.eos?'#B02E3C':heat(.15+.85*rec);
     ctx.fill();
@@ -924,7 +975,7 @@ function drawEmbed(g){
     placed.push({x:x+w/2,y,w});
     return true;
   };
-  const last=emb.screen[emb.screen.length-1];
+  const last=emb.screen[vis-1];
   if(last){                                 // latest: bold ring, always labeled
     ctx.beginPath();ctx.arc(last.x,last.y,4.5,0,7);
     ctx.strokeStyle='#22344A';ctx.lineWidth=1.5;ctx.stroke();ctx.lineWidth=1;
@@ -935,10 +986,10 @@ function drawEmbed(g){
   }
   if(emb.labels!=='off'){
     ctx.font='8px ui-monospace,Menlo,monospace';
-    for(let k=emb.screen.length-2;k>=0;k--){  // newest first = priority
+    for(let k=vis-2;k>=0;k--){              // newest first = priority
       const q=emb.screen[k],lt=tokLabel(q.f.text),w=lt.length*4.6+4;
       if(!fits(q.x+5,q.y+3,w))continue;
-      const rec=k/Math.max(1,emb.screen.length-1);
+      const rec=k/Math.max(1,vis-1);
       ctx.fillStyle=q.f.eos?'#B02E3C':
         `rgba(34,52,74,${(.3+.55*rec).toFixed(2)})`;
       ctx.fillText(lt,q.x+5,q.y+3);
@@ -1046,6 +1097,7 @@ function cellAt(ev){
 function embedPointAt(ev){                  // nearest gen/ctx point ≤9px
   let best=null,bd=81;
   (emb.screen||[]).forEach((q,k)=>{
+    if(k>=(emb.visCount||emb.screen.length))return;
     const d2=(q.x-ev.clientX)**2+(q.y-ev.clientY)**2;
     if(d2<bd){bd=d2;best={kind:'gen',k};}
   });
@@ -1284,6 +1336,30 @@ new ResizeObserver(draw).observe(cv);       // pane resizes may skip 'resize'
 // ═════════ cut-out panel — dashboard drill-down for a clicked cell ═════════
 let sel=null,panelPos={x:80,y:200};         // sel: {fi: frame idx, i: layer|null}
 draw();
+
+// embed mode is alive: slow rotation + a step-based generation replay.
+// The replay pauses while streaming (the live edge IS the animation),
+// while a point is selected, and under prefers-reduced-motion.
+let _lastTick=0,_stepAcc=0;
+function embTick(ts){
+  requestAnimationFrame(embTick);
+  if(!embedMode()){_lastTick=ts;return;}
+  const dt=Math.min(600,ts-(_lastTick||ts));  // time-based: correct at any
+  _lastTick=ts;                               // frame rate (throttled tabs)
+  let dirty=false;
+  if(emb.spin&&!drag){emb.yaw+=.0002*dt;dirty=true;}
+  if(emb.play&&!sel&&!busy&&emb.screen.length>1){
+    _stepAcc+=dt;
+    while(_stepAcc>150){
+      _stepAcc-=150;
+      emb.head++;
+      if(emb.head>emb.screen.length+10)emb.head=1;  // hold, then loop
+    }
+    dirty=true;
+  }
+  if(dirty)draw();
+}
+requestAnimationFrame(embTick);
 const panel=$('panel');
 function el(tag,cls,text){
   const e=document.createElement(tag);
@@ -1500,6 +1576,13 @@ window.addEventListener('keydown',e=>{
       }
       if(e.key==='c'||e.key==='C'){
         emb.ctx=!emb.ctx;e.preventDefault();return draw();
+      }
+      if(e.key===' '){
+        emb.play=!emb.play;emb.head=emb.visCount||1;
+        e.preventDefault();return draw();
+      }
+      if(e.key==='r'||e.key==='R'){
+        emb.spin=!emb.spin;e.preventDefault();return draw();
       }
       if(!sel&&e.key==='ArrowUp'&&nL){      // walk the depth axis
         emb.layer=Math.max(0,(emb.layer??nL-1)-1);
