@@ -36,6 +36,8 @@
   button:hover{background:var(--ink);color:var(--panel)}
   input{border-color:var(--line)}
   #base{width:210px}
+  #adv{display:contents}                    /* desktop: inline in the ctl row */
+  #cfg{display:none}                        /* gear only exists on mobile */
   #maxtok,#temp{width:52px}
   #log{flex:1;overflow-y:auto;padding:14px 12px;display:flex;
        flex-direction:column;gap:10px;position:relative;z-index:1;
@@ -146,7 +148,16 @@
   #explain ul{margin:2px 0 2px 16px;padding:0}
   #explain li{margin:2px 0}
   @media (max-width:760px){
+    header{padding:6px 10px;column-gap:8px;row-gap:6px}
+    header h1{font-size:13px}
+    #stat{flex:1;min-width:0;white-space:nowrap;overflow:hidden;
+          text-overflow:ellipsis}          /* one line, not three */
     .ctl{margin-left:0;width:100%}
+    #engine{flex:1;max-width:none;min-width:0}
+    #adv{display:none}                     /* api/max/T behind the gear */
+    header.adv #adv{display:flex;width:100%;gap:6px;align-items:center;
+          flex-wrap:wrap}
+    #cfg{display:inline-block}
     #base{flex:1;width:auto}
     .msg{max-width:92%}
     button,input,select{padding:7px 10px;font-size:13px}  /* finger targets */
@@ -186,12 +197,15 @@
       <option value="HuggingFaceTB/SmolLM2-360M-Instruct">browser · SmolLM2-360M</option>
       <option value="onnx-community/Qwen2.5-0.5B-Instruct">browser · Qwen2.5-0.5B</option>
     </select>
-    <label>api</label><input id="base" spellcheck="false">
-    <label>max</label><input id="maxtok" value="256" inputmode="numeric">
-    <label>T</label><input id="temp" value="0" inputmode="decimal">
+    <span id="adv">
+      <label>api</label><input id="base" spellcheck="false">
+      <label>max</label><input id="maxtok" value="256" inputmode="numeric">
+      <label>T</label><input id="temp" value="0" inputmode="decimal">
+    </span>
     <button id="metric" title="cycle heatmap metric (or click the background)">viz: mlp</button>
     <button id="help" title="what am I looking at?">?</button>
     <button id="clear">clear</button>
+    <button id="cfg" title="api endpoint · max tokens · temperature">⚙</button>
   </div>
   <div id="loadwrap" hidden>
     <div id="loadbar"><div id="loadfill"></div></div>
@@ -387,6 +401,13 @@
 'use strict';
 const $=id=>document.getElementById(id);
 const log=$('log'),input=$('in'),stat=$('stat');
+const COARSE=matchMedia('(pointer:coarse)').matches;
+if(COARSE||matchMedia('(max-width:760px)').matches)
+  input.placeholder='message · enter sends';
+$('cfg').onclick=()=>{                      // mobile: api/max/T behind a gear
+  document.querySelector('header').classList.toggle('adv');
+  draw();                                   // header height moved the canvas top
+};
 $('base').value=location.protocol.startsWith('http')
   ? location.origin+'/v1' : 'http://localhost:8080/v1';
 
@@ -705,7 +726,11 @@ wsConnect();
 function geometry(){                        // heatmap sits between the glass bars
   const w=cv.clientWidth,h=cv.clientHeight;
   const hint=document.querySelector('.hint'),foot=document.querySelector('footer');
-  const top=(hint?hint.getBoundingClientRect().bottom:0)+PAD;
+  const hdr=document.querySelector('header');
+  // mobile hides .hint (display:none → rect 0), so anchor to whichever glass
+  // bar reaches lower — otherwise the token strip renders behind the header
+  const top=Math.max(hdr?hdr.getBoundingClientRect().bottom:0,
+                     hint?hint.getBoundingClientRect().bottom:0)+PAD;
   const bot=(foot?foot.getBoundingClientRect().top:h)-PAD;
   const tk=56;                              // predicted-token strip height
   const n=viz.topo?viz.topo.layers.length:0;
@@ -714,6 +739,21 @@ function geometry(){                        // heatmap sits between the glass ba
   const cols=Math.max(1,Math.floor((w-RAIL-PAD)/CW));
   const first=Math.max(0,viz.offset-cols+1);
   return {w,h,n,rh,cols,first,top,bot,tk,rt};
+}
+function noInternals(){                     // frames exist but none carry layers
+  return viz.frames.length>0&&!viz.frames.some(f=>f.layers?.length);
+}
+function note(txt,x,y,maxw,down=false,lh=12){ // word-wrapped canvas text;
+  const lines=[];let cur='';                  // y = first (down) or last line
+  for(const w of txt.split(' ')){
+    const t=cur?cur+' '+w:w;
+    if(cur&&ctx.measureText(t).width>maxw){lines.push(cur);cur=w;}
+    else cur=t;
+  }
+  if(cur)lines.push(cur);
+  lines.forEach((l,i)=>
+    ctx.fillText(l,x,down?y+i*lh:y-(lines.length-1-i)*lh));
+  return lines.length;
 }
 function draw(){
   const dpr=window.devicePixelRatio||1;
@@ -726,8 +766,11 @@ function draw(){
   if(!viz.topo)return;
   const g=geometry(),mx=viz.rowMax[METRICS[viz.metric][0]]||[];
   const key=METRICS[viz.metric][1];
+  const bl='viz: '+(key&&noInternals()?'topk':METRICS[viz.metric][0]);
+  if($('metric').textContent!==bl)$('metric').textContent=bl;
   ctx.font='9px ui-monospace,Menlo,monospace';
   if(!key){drawEmbed(g);return;}            // embed → trajectory view
+  if(noInternals()){drawTopk(g);return;}    // browser run → predictions view
   // left rail: layer label + kind glyph
   const step=Math.max(1,Math.ceil(11/g.rh));
   for(let i=0;i<g.n;i++){
@@ -844,13 +887,13 @@ function draw(){
   if(engine!=='server'){
     const obsRun=viz.frames.some(f=>f.layers?.length);
     ctx.fillStyle=obsRun?'#3E7CA8':'#B02E3C';
-    ctx.fillText(obsRun
+    note(obsRun
       ?'observable in-browser model: resid norms + trajectory + predictions '+
        'computed client-side (try viz: resid / embed) · mlp/attn/heads/lens '+
        'still need the server'
-      :'browser engine: real tokens + top-k predictions, but no layer '+
-       'internals (cells stay pale) — switch to "server api" or the '+
-       'observable model for more',RAIL,g.bot-4);
+      :'browser engine: real tokens + top-k predictions — send a message '+
+       'to see them · full internals need "server api" or the observable '+
+       'model',RAIL,g.bot-4,g.w-RAIL-PAD-4);
   }else{
     ctx.fillStyle='#6B7A8C';
     if(!viz.frames.length){
@@ -859,6 +902,87 @@ function draw(){
       ctx.fillText('◂ history · drag right to resume live',RAIL,g.bot-4);
     }
   }
+}
+
+// browser runs carry no per-layer internals — instead of an empty layer grid,
+// show what the engine DOES produce: the sampled tokens, a per-step confidence
+// lane, and the model's full top-5 next-token distribution for one step
+function drawTopk(g){
+  const CH=46;                              // confidence-lane height
+  ctx.fillStyle='#6B7A8C';
+  ctx.fillText('tok',4,g.top+g.tk/2+3);
+  ctx.fillText('p₁',4,g.rt+CH/2+3);
+  for(let c=0;c<g.cols;c++){
+    const f=viz.frames[g.first+c];
+    if(!f)break;
+    const x=RAIL+c*CW;
+    ctx.save();                             // rotated token text, clipped
+    ctx.beginPath();ctx.rect(x,g.top,CW,g.tk-3);ctx.clip();
+    ctx.translate(x+CW/2+3,g.top+g.tk-6);
+    ctx.rotate(-Math.PI/2);
+    ctx.fillStyle=f.eos?'#B02E3C':'rgba(34,52,74,.75)';
+    ctx.fillText(tokLabel(f.text),0,0);
+    ctx.restore();
+    if(f.eos){ctx.fillStyle='#22344A';ctx.fillRect(x,g.top-4,CW-1,2);}
+    const p=f.topk?.[0]?.[1];               // bar = top-1 prob, hot = unsure
+    if(p!==undefined){
+      const bh=Math.max(2,p*CH);
+      ctx.fillStyle=heat(1-p);
+      ctx.fillRect(x,g.rt+CH-bh,CW-1,bh);
+    }
+  }
+  viz.confBot=g.rt+CH;                      // cellAt: lane taps = token taps
+  ctx.strokeStyle='#C9D2DB';
+  ctx.strokeRect(RAIL-.5,g.rt-.5,
+    Math.min(g.cols,viz.frames.length-g.first)*CW+1,CH+1);
+  ctx.strokeStyle='#22344A';ctx.setLineDash([2,3]);
+  for(const b of viz.bounds){               // run boundaries
+    if(b<=g.first||b>g.first+g.cols)continue;
+    const x=RAIL+(b-g.first)*CW-.5;
+    ctx.beginPath();ctx.moveTo(x,g.top);ctx.lineTo(x,g.rt+CH);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if(hover&&hover.c!==undefined){           // hover column
+    ctx.strokeStyle='rgba(34,52,74,.55)';
+    ctx.strokeRect(RAIL+hover.c*CW-.5,g.top-.5,CW,g.tk+CH);
+  }
+  let focus=viz.frames[viz.offset];         // detail: hovered ?? pinned ?? live
+  if(hover?.f)focus=hover.f;
+  if(sel&&viz.frames[sel.fi]){
+    focus=viz.frames[sel.fi];
+    if(sel.fi>=g.first&&sel.fi<g.first+g.cols){
+      const x=RAIL+(sel.fi-g.first)*CW;
+      ctx.strokeStyle='#B02E3C';ctx.lineWidth=2;
+      ctx.strokeRect(x-1,g.top-1,CW+1,g.tk+CH+1);
+      ctx.lineWidth=1;
+    }
+  }
+  const y0=g.rt+CH+34,LX=RAIL+106,
+        bw=Math.max(60,Math.min(300,g.w-LX-46));
+  if(focus?.topk?.length){                  // top-5 at a finger-friendly size
+    ctx.font='11px ui-monospace,Menlo,monospace';
+    ctx.fillStyle='#22344A';
+    ctx.fillText(`top-5 next token · t=${focus.t} → `+
+      JSON.stringify(tokLabel(focus.text)),RAIL,y0-12);
+    focus.topk.forEach(([tw,p],i)=>{
+      const y=y0+i*20,pick=tw===focus.text;
+      ctx.fillStyle=pick?'#B02E3C':'#6B7A8C';
+      ctx.fillText(((pick?'▸ ':'  ')+tokLabel(tw)).slice(0,14),RAIL,y+10);
+      ctx.fillStyle='#D8DEE6';
+      ctx.fillRect(LX,y,bw,12);
+      ctx.fillStyle=heat(.25+.75*p);
+      ctx.fillRect(LX,y,Math.max(2,bw*p),12);
+      ctx.fillStyle='#22344A';
+      ctx.fillText((p*100).toFixed(p>=.1?0:1)+'%',LX+bw+6,y+10);
+    });
+  }
+  ctx.font='10px ui-monospace,Menlo,monospace';
+  ctx.fillStyle='#3E7CA8';
+  note('in-browser run: real tokens + the model’s top-5 predictions '+
+    '(p₁ lane = confidence in each step, hot = uncertain) · tap a '+
+    'column to pin a step · per-layer internals need the server api or '+
+    'the observable model',RAIL,g.bot-4,g.w-RAIL-PAD-4);
+  ctx.font='9px ui-monospace,Menlo,monospace';
 }
 
 // embed mode: residual trajectory in a fixed random 3D basis
@@ -878,23 +1002,23 @@ function drawEmbed(g){
   const MM=n?64:0;                          // layer-minimap column width
   ctx.font='10px ui-monospace,Menlo,monospace';
   ctx.fillStyle='#6B7A8C';
-  ctx.fillText(`embedding trajectory · L${String(L).padStart(2,'0')} residual `+
-    `→ fixed random ${emb.dim}d projection · zoom ${emb.zoom.toFixed(1)}×`,
-    RAIL,g.top+4);
-  ctx.fillText(`${emb.play?'▸ replay':'⏸ replay'} (space) · `+
+  const tl=note(`embedding trajectory · L${String(L).padStart(2,'0')} `+
+    `residual → fixed random ${emb.dim}d projection · zoom `+
+    `${emb.zoom.toFixed(1)}×`,RAIL,g.top+4,g.w-RAIL-MM-8,true);
+  note(`${emb.play?'▸ replay':'⏸ replay'} (space) · `+
     `${emb.spin?'↻ spin':'· spin'} (r) · drag rotates · wheel zooms · `+
     `↑/↓ layer · d 2d/3d · t labels (${emb.labels}) · c context · `+
-    'click a point → cut-out',RAIL,g.bot-4);
+    'click a point → cut-out',RAIL,g.bot-4,g.w-RAIL-PAD-4);
   const {pts,cpts}=embLayerPts(L);
   emb.screen=[];emb.cscreen=[];emb.mmap=[];
   if(!pts.length&&!cpts.length){
     if(engine!=='server'){
       ctx.fillStyle='#B02E3C';
-      ctx.fillText('browser runs expose no hidden states — the trajectory '+
-        'needs the server engine (heatmap mode shows tokens + predictions)',
-        RAIL,g.top+20);
+      note('browser runs expose no hidden states — the trajectory '+
+        'needs the server engine or the observable model (heatmap mode '+
+        'shows tokens + predictions)',RAIL,g.top+8+tl*12,g.w-RAIL-16,true);
     }else ctx.fillText('no projection data yet — send a message',
-      RAIL,g.top+20);
+      RAIL,g.top+8+tl*12);
     return;
   }
   const cyw=Math.cos(emb.yaw),syw=Math.sin(emb.yaw),
@@ -928,7 +1052,7 @@ function drawEmbed(g){
   emb.visCount=vis;
   ctx.fillStyle='#6B7A8C';
   if(emb.play&&!sel&&!busy)
-    ctx.fillText(`▸ step ${vis}/${total}`,RAIL,g.top+16);
+    ctx.fillText(`▸ step ${vis}/${total}`,RAIL,g.top+4+tl*12);
   ctx.save();                               // clip the plot off the minimap
   ctx.beginPath();ctx.rect(0,g.top+10,g.w-MM-4,g.bot-g.top-22);ctx.clip();
   if(emb.cscreen.length){                   // context trace beneath, in blue
@@ -1090,6 +1214,8 @@ function cellAt(ev){
   const fi=g.first+c,f=viz.frames[fi];
   if(ev.clientY>=g.top&&ev.clientY<g.rt)   // token strip → token-level hover
     return {c,i:null,f,fi};
+  if(noInternals())                        // topk view: p₁ lane = token taps
+    return ev.clientY<(viz.confBot??g.rt)?{c,i:null,f,fi}:null;
   const i=Math.floor((ev.clientY-g.rt)/g.rh);
   if(i<0||i>=g.n)return null;
   return {c,i,f,fi};
@@ -1698,7 +1824,8 @@ async function send(){
     msgs.pop();                                  // let the user retry the turn
   }finally{
     el.classList.remove('busy');
-    busy=false;$('send').disabled=false;input.focus();
+    busy=false;$('send').disabled=false;
+    if(!COARSE)input.focus();   // mobile: keep the keyboard down, show the viz
   }
 }
 
@@ -1710,8 +1837,9 @@ input.oninput=()=>{
   input.style.height='auto';
   input.style.height=Math.min(input.scrollHeight,140)+'px';
 };
-$('clear').onclick=()=>{msgs=[];log.replaceChildren();input.focus();};
-input.focus();
+$('clear').onclick=()=>{msgs=[];log.replaceChildren();
+                        if(!COARSE)input.focus();};
+if(!COARSE)input.focus();
 </script>
 </body>
 </html>
