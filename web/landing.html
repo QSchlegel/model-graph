@@ -422,15 +422,20 @@ function fit(cv){
   },320);
 })();
 
-// card 2: rotating residual trajectory + context trace
+// card 2: residual trajectory — stepwise generation replay while rotating
 (()=>{
   const cv=document.getElementById('trajmock');
   const gen=[],ctxp=[];
-  let p=[0,0,0],yaw=0;
+  let p=[0,0,0],yaw=0,head=1,acc=0,last=0;
   for(let i=0;i<26;i++){p=p.map(v=>v+(Math.random()-.5)*2);ctxp.push([...p]);}
   for(let i=0;i<42;i++){p=p.map(v=>v+(Math.random()-.5)*2.4);gen.push([...p]);}
-  function draw(){
-    yaw+=.012;
+  function step(ts){
+    const dt=Math.min(600,ts-(last||ts));last=ts;   // time-based
+    yaw+=.0008*dt;
+    acc+=dt;
+    while(acc>130){acc-=130;head++;
+      if(head>gen.length+12)head=1;}      // hold at full, then loop
+    const vis=Math.min(head,gen.length);
     const[c2,W,H]=fit(cv);
     c2.clearRect(0,0,W,H);
     const cy=Math.cos(yaw),sy=Math.sin(yaw);
@@ -444,18 +449,27 @@ function fit(cv){
     ctxp.forEach(q=>{const[a,b]=P(q);
       c2.beginPath();c2.arc(a,b,1.5,0,7);
       c2.fillStyle=PAPER;c2.fill();c2.strokeStyle=CTX;c2.stroke();});
-    for(let k=1;k<gen.length;k++){
-      const[a,b]=P(gen[k-1]),[x,y]=P(gen[k]),rec=k/gen.length;
+    for(let k=1;k<vis;k++){                // path up to the playhead
+      const[a,b]=P(gen[k-1]),[x,y]=P(gen[k]),rec=k/Math.max(1,vis-1);
       c2.strokeStyle=heat(.2+.8*rec);c2.lineWidth=.8+rec;
       c2.beginPath();c2.moveTo(a,b);c2.lineTo(x,y);c2.stroke();
     }
     c2.lineWidth=1;
-    gen.forEach((q,k)=>{const[a,b]=P(q);
+    gen.slice(0,vis).forEach((q,k)=>{const[a,b]=P(q);
       c2.beginPath();c2.arc(a,b,2,0,7);
-      c2.fillStyle=heat(.2+.8*k/gen.length);c2.fill();});
-    requestAnimationFrame(draw);
+      c2.fillStyle=heat(.2+.8*k/Math.max(1,vis-1));c2.fill();});
+    const[hx,hy]=P(gen[vis-1]);            // live edge, ringed
+    c2.beginPath();c2.arc(hx,hy,4,0,7);
+    c2.strokeStyle=INK;c2.lineWidth=1.5;c2.stroke();c2.lineWidth=1;
+    c2.fillStyle=MUT;c2.font='9px ui-monospace,Menlo,monospace';
+    c2.fillText(`▸ t=${vis}/${gen.length}`,8,12);
   }
-  draw();
+  function loop(ts){requestAnimationFrame(loop);step(ts);}
+  requestAnimationFrame(loop);              // 60fps where rAF runs...
+  setInterval(()=>{                         // ...watchdog where it's throttled
+    const n=performance.now();
+    if(n-last>350)step(n);
+  },350);
 })();
 
 // card 3: attention arcs over a token strip
