@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Making ONNX observable: residual streams for in-browser interpretability · model-graph blog</title>
+<meta name="description" content="Compiled ONNX graphs only expose declared outputs. With ~40 lines of graph surgery, the residual streams already flowing through fused SkipLayerNorm nodes become visible — enabling WebGPU in-browser interpretability.">
+<link rel="canonical" href="https://model-graph.com/blog/observable-onnx.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Making ONNX observable: residual streams for in-browser interpretability">
+<meta property="og:description" content="Compiled ONNX graphs only expose declared outputs. With ~40 lines of graph surgery, the residual streams already flowing through fused SkipLayerNorm nodes become visible — enabling WebGPU in-browser interpretability.">
+<meta property="og:url" content="https://model-graph.com/blog/observable-onnx.html">
+<meta property="og:site_name" content="model-graph">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='3' y='3' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='12.5' y='3' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='3' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='3' y='12.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='12.5' y='12.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='12.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='3' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='12.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='16' r='3' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"TechArticle",
+ "headline":'Making ONNX observable: residual streams for in-browser interpretability',"description":'Compiled ONNX graphs only expose declared outputs. With ~40 lines of graph surgery, the residual streams already flowing through fused SkipLayerNorm nodes become visible — enabling WebGPU in-browser interpretability.',
+ "datePublished":"2026-07-20","dateModified":"2026-07-20",
+ "author":{"@type":"Person","name":"Quirin Schlegel",
+            "url":"https://quirinschlegel.com"},
+ "publisher":{"@type":"Organization","name":"model-graph",
+               "url":"https://model-graph.com"},
+ "mainEntityOfPage":"https://model-graph.com/blog/observable-onnx.html"}
+</script>
+<style>
+  :root{--paper:#EEF1F4;--panel:#FFFFFF;--ink:#22344A;--muted:#6B7A8C;
+    --line:#C9D2DB;--heat1:#E39B2D;--heat2:#B02E3C;--ctxc:#3E7CA8;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+  *{box-sizing:border-box;margin:0}
+  html,body{max-width:100%;overflow-x:hidden}
+  body{background:var(--paper);color:var(--ink);font:14.5px/1.7 var(--mono);
+    -webkit-tap-highlight-color:transparent}
+  a{color:var(--ink)}
+  header{display:flex;gap:10px;align-items:center;padding:10px 16px;
+    border-bottom:1px solid rgba(255,255,255,.6);
+    background:rgba(255,255,255,.6);position:sticky;top:0;z-index:5;
+    -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+  .brand{font-weight:600;text-decoration:none;white-space:nowrap}
+  header nav{margin-left:auto;display:flex;gap:2px;font-size:13px;
+    overflow-x:auto;white-space:nowrap}
+  header nav a{text-decoration:none;padding:7px 10px;border-radius:7px}
+  header nav a:hover{background:rgba(255,255,255,.8)}
+  main{max-width:720px;margin:0 auto;padding:36px 18px 70px}
+  article{background:rgba(255,255,255,.62);border:1px solid rgba(255,255,255,.7);
+    border-radius:14px;padding:30px 32px;
+    box-shadow:0 10px 34px rgba(34,52,74,.10);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}
+  h1{font-size:24px;line-height:1.3;margin-bottom:6px}
+  .meta{color:var(--muted);font-size:12.5px;margin-bottom:22px}
+  h2{font-size:16px;margin:26px 0 8px}
+  p{margin:11px 0}
+  li{margin:6px 0}
+  ul,ol{margin:10px 0 10px 20px}
+  code{background:rgba(216,222,230,.6);padding:1px 5px;border-radius:3px;
+    font-size:.92em}
+  pre{background:rgba(34,52,74,.9);color:var(--paper);padding:14px 16px;
+    border-radius:10px;overflow-x:auto;font-size:12.5px;line-height:1.6;
+    margin:12px 0}
+  .post{display:block;text-decoration:none;background:rgba(255,255,255,.62);
+    border:1px solid rgba(255,255,255,.7);border-radius:14px;
+    padding:16px 20px;margin:14px 0;
+    box-shadow:0 8px 26px rgba(34,52,74,.09)}
+  .post:hover{border-color:var(--heat1)}
+  .post h2{margin:0 0 4px}
+  .post p{color:var(--muted);font-size:13px;margin:4px 0 0}
+  footer{text-align:center;color:var(--muted);font-size:12.5px;
+    padding:22px;border-top:1px solid rgba(255,255,255,.6)}
+  footer a{margin:0 7px}
+  @media(max-width:640px){article{padding:20px 16px}main{padding:22px 12px 50px}}
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">model-graph</a>
+  <nav>
+    <a href="/blog/">blog</a><a href="/chat">chat</a>
+    <a href="/six-pager">six-pager</a>
+    <a href="https://github.com/QSchlegel/model-graph">github</a>
+    <a href="https://quirinschlegel.com">quirinschlegel.com</a>
+  </nav>
+</header>
+<main>
+<article>
+<h1>Making ONNX observable: residual streams for in-browser interpretability</h1>
+<div class="meta">2026-07-20 · Quirin Schlegel · 6 min</div>
+<p>Running an LLM in the browser via WebGPU (transformers.js + ONNX
+Runtime) is delightful — and completely opaque. A compiled ONNX graph
+exposes only its declared outputs: logits and KV-cache. There is nowhere
+to hang a forward hook. The hidden states exist for microseconds inside
+fused kernels, then vanish.</p>
+<h2>The trick: they're already computed</h2>
+<p>Optimized exports fuse each residual add into a
+<code>SkipSimplifiedLayerNormalization</code> node — which has an
+<em>optional fourth output</em>, <code>input_skip_bias_sum</code>: the
+residual stream itself. Layer <em>i</em>'s residual is exactly that
+output on layer <em>i+1</em>'s input-layernorm. The final layer's sum is
+one undeclared optional output away on the final norm node.</p>
+<p>So the "surgery" is almost embarrassingly small: map the 30 tensor
+names, bridge each through a <code>Cast</code> to fp32 with a stable name
+(<code>hidden.0…hidden.29</code>), and append them to
+<code>graph.output</code>. Zero extra compute — the tensors were always
+flowing; they just weren't visible.</p>
+<pre>hidden.i = layers[i+1].input_layernorm.input_skip_bias_sum
+validation vs PyTorch hooks:
+  ✓ next-token argmax parity
+  ✓ residual norms track reference (worst drift 12.1% — q4f16)
+  ✓ 30 outputs, [batch, seq, 576]</pre>
+<h2>What it unlocks</h2>
+<p>In model-graph, a patched <code>model.forward</code> reads
+<code>hidden.*</code> each step and computes residual norms, a seeded 3D
+projection (the trajectory view), and top-k — all client-side, from real
+tensors, on WebGPU. Serverless interpretability: the browser fetches
+weights from Hugging Face and inspects itself.</p>
+<p>The honest boundary: per-block writes (attention/MLP separately) and
+per-head signals need more declared outputs — same technique, more
+tensor-name mapping. The export script and validation live in
+<a href="https://github.com/QSchlegel/model-graph">the repo</a>
+(<code>export_observable.py</code>); try the UI at
+<a href="/">model-graph.com</a>.</p>
+</article></main>
+<footer>
+  <a href="/">model-graph</a> ·
+  <a href="https://github.com/QSchlegel/model-graph">GitHub</a> ·
+  <a href="https://quirinschlegel.com">Quirin Schlegel</a> · MIT
+</footer>
+</body>
+</html>

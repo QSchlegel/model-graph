@@ -401,6 +401,31 @@ def make_app(backend: Backend, hub: Hub, cur=None):
         return web.FileResponse(os.path.join(WEB, "six-pager.html"),
                                 headers=NOCACHE)
 
+    async def blog_index(_request):
+        return web.FileResponse(os.path.join(WEB, "blog", "index.html"),
+                                headers=NOCACHE)
+
+    CANON = "https://model-graph.com"
+    PAGES = ["/", "/chat", "/dashboard", "/six-pager", "/blog/",
+             "/blog/see-your-model-think.html",
+             "/blog/logit-lens-live.html",
+             "/blog/observable-onnx.html"]
+
+    async def sitemap(_request):
+        body = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+                '<urlset xmlns="http://www.sitemaps.org/schemas/'
+                'sitemap/0.9">\n'
+                + "".join(f"<url><loc>{CANON}{p}</loc></url>\n"
+                          for p in PAGES)
+                + "</urlset>")
+        return web.Response(text=body, content_type="application/xml",
+                            headers=NOCACHE)
+
+    async def robots(_request):
+        return web.Response(
+            text=f"User-agent: *\nAllow: /\nSitemap: {CANON}/sitemap.xml\n",
+            content_type="text/plain", headers=NOCACHE)
+
     async def contrib_page(_request):
         return web.FileResponse(
             os.path.join(os.path.dirname(WEB), "CONTRIBUTING.md"),
@@ -435,6 +460,11 @@ def make_app(backend: Backend, hub: Hub, cur=None):
     app.router.add_get("/chat", chat_page)
     app.router.add_get("/dashboard", dash_page)
     app.router.add_get("/six-pager", sixpager_page)
+    app.router.add_get("/blog", blog_index)
+    app.router.add_get("/blog/", blog_index)
+    app.router.add_static("/blog/", os.path.join(WEB, "blog"))
+    app.router.add_get("/sitemap.xml", sitemap)
+    app.router.add_get("/robots.txt", robots)
     app.router.add_get("/ws", ws_endpoint)
     app.router.add_get("/CONTRIBUTING.md", contrib_page)
     app.router.add_get("/v1/models", models)
