@@ -14,6 +14,6 @@ COPY vault ./vault
 COPY suites ./suites
 COPY CONTRIBUTING.md ./
 
-ENV PORT=8080
+ENV PORT=8080 HOST=0.0.0.0
 EXPOSE 8080
 CMD ["python", "api_server.py", "--mock", "--no-curate"]

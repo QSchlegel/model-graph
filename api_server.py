@@ -483,10 +483,11 @@ async def main():
         finally:
             hub.drop(ws.send)
 
+    host = os.environ.get("HOST", "localhost")   # 0.0.0.0 in containers
     runner = web.AppRunner(make_app(backend, hub, cur))
     await runner.setup()
-    await web.TCPSite(runner, "localhost", args.http_port).start()
-    async with websockets.serve(ws_handler, "localhost", args.ws_port):
+    await web.TCPSite(runner, host, args.http_port).start()
+    async with websockets.serve(ws_handler, host, args.ws_port):
         print(f"model-graph api ({backend.model_id})\n"
               f"  chat UI:    http://localhost:{args.http_port}/\n"
               f"  dashboard:  http://localhost:{args.http_port}/dashboard\n"
