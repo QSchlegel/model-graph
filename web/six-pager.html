@@ -4,6 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>model-graph · six-pager</title>
+<meta name="description" content="The transformer architecture, visualized live: how model-graph renders the residual stream, attention, MLPs, the logit lens and embedding trajectories — with real captured examples.">
+<link rel="canonical" href="https://model-graph.com/six-pager">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='3' y='3' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='12.5' y='3' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='3' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='3' y='12.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='12.5' y='12.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='12.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='3' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='12.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='16' r='3' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
 <style>
   :root{
@@ -12,66 +14,96 @@
     --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box;margin:0}
-  body{background:var(--paper);color:var(--ink);font:14px/1.65 var(--mono)}
+  html,body{max-width:100%;overflow-x:hidden}
+  body{background:var(--paper);color:var(--ink);font:14px/1.68 var(--mono)}
   a{color:var(--ink)}
-  header{display:flex;gap:12px;align-items:center;padding:10px 18px;
+  header{display:flex;gap:12px;align-items:center;padding:10px 16px;
          border-bottom:1px solid rgba(255,255,255,.6);
          background:rgba(255,255,255,.6);position:sticky;top:0;z-index:5;
          -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
   .brand{display:flex;align-items:center;gap:9px;font-weight:600;
-         font-size:15px;text-decoration:none;white-space:nowrap}
-  .brand svg{width:22px;height:22px;display:block}
-  header .acts{margin-left:auto;display:flex;gap:8px}
+         font-size:15px;text-decoration:none;white-space:nowrap;min-width:0}
+  .brand svg{width:22px;height:22px;display:block;flex:none}
+  header .acts{margin-left:auto;display:flex;gap:8px;flex:none}
   .btn{font:12.5px var(--mono);padding:7px 12px;border:1.5px solid var(--ink);
        border-radius:6px;background:rgba(255,255,255,.7);cursor:pointer;
        text-decoration:none;color:var(--ink)}
   .btn.primary{background:var(--ink);color:var(--panel)}
   .btn:hover{background:var(--heat1);color:var(--ink)}
-  main{max-width:820px;margin:0 auto;padding:40px 22px 80px}
+  main{max-width:860px;margin:0 auto;padding:36px 20px 80px}
   .doc{background:rgba(255,255,255,.66);border:1px solid rgba(255,255,255,.7);
-       border-radius:16px;padding:42px 46px;
+       border-radius:16px;padding:44px 48px;
        box-shadow:0 14px 44px rgba(34,52,74,.12);
        -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
-  h1{font-size:27px;line-height:1.25;margin-bottom:4px}
-  .sub{color:var(--muted);margin-bottom:30px}
-  h2{font-size:16px;margin:34px 0 10px;padding-top:14px;
-     border-top:1px solid var(--line)}
-  h2 span{color:var(--heat2);margin-right:8px}
+  .cover{display:flex;gap:18px;align-items:center;margin-bottom:8px}
+  .cover svg{width:52px;height:52px;flex:none}
+  h1{font-size:27px;line-height:1.25}
+  .sub{color:var(--muted);margin:6px 0 8px}
+  .abstract{border-left:3px solid var(--heat1);padding:8px 14px;
+       background:rgba(227,155,45,.07);border-radius:0 8px 8px 0;
+       margin:18px 0 6px;font-size:13.5px}
+  section.pg{margin-top:34px}
+  h2{font-size:17px;margin:0 0 12px;display:flex;align-items:center;gap:10px}
+  h2 .n{flex:none;width:30px;height:30px;border-radius:8px;background:var(--ink);
+       color:var(--panel);display:flex;align-items:center;justify-content:center;
+       font-size:15px}
+  h3{font-size:14px;margin:18px 0 6px;color:var(--heat2)}
   p{margin:10px 0}
-  ol,ul{margin:10px 0 10px 22px}
+  ul,ol{margin:10px 0 10px 22px}
   li{margin:6px 0}
-  b{color:var(--ink)}
-  .tenet b{color:var(--heat2)}
-  em{color:var(--muted);font-style:italic}
-  @media (max-width:640px){.doc{padding:26px 20px}}
-  @media print{
-    header{display:none}
-    body{background:#fff}
-    main{padding:0;max-width:none}
-    .doc{background:#fff;border:0;box-shadow:none;border-radius:0;
-         padding:0;-webkit-backdrop-filter:none;backdrop-filter:none}
-    h2{break-inside:avoid}
+  em{color:var(--muted)}
+  code{background:rgba(216,222,230,.6);padding:1px 5px;border-radius:3px;
+       font-size:.92em}
+  figure{margin:18px 0;padding:14px 16px;background:rgba(255,255,255,.7);
+       border:1px solid var(--line);border-radius:12px}
+  figure svg{width:100%;height:auto;display:block}
+  figcaption{font-size:12px;color:var(--muted);margin-top:8px}
+  .ladder{display:grid;grid-template-columns:1fr 1fr;gap:2px 22px;
+       font-size:12.5px}
+  .lr{display:flex;gap:8px;padding:2px 6px;border-left:3px solid transparent;
+       align-items:baseline}
+  .lr .l{color:var(--muted);width:34px;flex:none}
+  .lr .w{flex:1}
+  .lr .p{color:var(--muted)}
+  .lr.chg{border-left-color:var(--heat2);background:rgba(227,155,45,.10)}
+  .lr.settle{border-left-color:var(--heat2);background:rgba(176,46,60,.12);
+       font-weight:600}
+  .bars{font-size:12.5px}
+  .bars .b{display:flex;align-items:center;gap:8px;margin:3px 0}
+  .bars .b .l{width:120px;flex:none;overflow:hidden;text-overflow:ellipsis;
+       white-space:nowrap}
+  .bars .b .t{flex:1;height:9px;background:var(--paper);border-radius:3px;
+       overflow:hidden}
+  .bars .b .f{height:100%;border-radius:3px;
+       background:linear-gradient(90deg,var(--heat1),var(--heat2))}
+  .bars .b .v{width:48px;color:var(--muted);flex:none;text-align:right}
+  .callout{border-left:3px solid var(--ctxc);background:rgba(62,124,168,.08);
+       padding:8px 14px;border-radius:0 8px 8px 0;margin:12px 0;
+       font-size:13px}
+  @media (max-width:680px){
+    .doc{padding:24px 18px}
+    .ladder{grid-template-columns:1fr}
+    header .acts .btn{padding:7px 9px;font-size:12px}
   }
-  .lgo rect:not(:first-of-type){animation:lgoPulse 2.6s ease-in-out infinite}
-  .lgo rect:nth-of-type(2){animation-delay:0s}
-  .lgo rect:nth-of-type(3){animation-delay:.3s}
-  .lgo rect:nth-of-type(4){animation-delay:.6s}
-  .lgo rect:nth-of-type(5){animation-delay:.9s}
-  .lgo rect:nth-of-type(6){animation-delay:1.2s}
-  .lgo rect:nth-of-type(7){animation-delay:1.5s}
-  .lgo rect:nth-of-type(8){animation-delay:1.8s}
-  .lgo rect:nth-of-type(9){animation-delay:2.1s}
-  .lgo rect:nth-of-type(10){animation-delay:2.4s}
-  @keyframes lgoPulse{0%,100%{opacity:1}50%{opacity:.35}}
-  .lgo circle{animation:lgoRing 2.6s ease-in-out infinite}
-  @keyframes lgoRing{0%,100%{opacity:1}50%{opacity:.5}}
-  @media (prefers-reduced-motion:reduce){.lgo rect,.lgo circle{animation:none}}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    header{display:none}
+    body{background:#fff;font-size:12.5px}
+    main{padding:0;max-width:none}
+    .doc{background:#fff;border:0;box-shadow:none;border-radius:0;padding:0;
+         -webkit-backdrop-filter:none;backdrop-filter:none}
+    section.pg{page-break-before:always;margin-top:0;padding-top:6mm}
+    figure{break-inside:avoid}
+    h2{break-after:avoid}
+    a{text-decoration:none}
+  }
+  @page{margin:15mm}
 </style>
 </head>
 <body>
 <header>
   <a class="brand" href="/">
-    <svg class="lgo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="3" y="3" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="12.5" y="3" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="3" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="3" y="12.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="12.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="3" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="12.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="16" r="3" fill="none" stroke="#FFFFFF" stroke-width="1.6"/></svg>
+    <svg class="lgo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="3" y="3" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="12.5" y="3" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="3" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="3" y="12.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="12.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="3" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="12.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="16" r="3" fill="none" stroke="#FFF" stroke-width="1.6"/></svg>
     model-graph · six-pager
   </a>
   <div class="acts">
@@ -82,127 +114,284 @@
   </div>
 </header>
 <main><div class="doc">
-  <h1>model-graph — an open window into a running language model</h1>
-  <div class="sub">Open-source product six-pager · July 2026 ·
-    github.com/QSchlegel/model-graph</div>
 
-  <h2><span>1</span>The problem</h2>
-  <p>Language models are the most-watched black boxes in software.
-  Developers ship agents that call tools, reason through chains, and read
-  images — and when one goes wrong, the only observable artifact is text.
-  Did the model not <em>know</em>? Not <em>look at</em> the right part of
-  the prompt? Commit to a wrong answer early, or waver until the last
-  layer? Today that question sends you to offline interpretability stacks:
-  notebook-bound, research-oriented, hours-per-question tools built for
-  papers, not for the loop developers actually live in — <em>send a
-  prompt, watch what happens, change something, send again.</em></p>
-  <p>The gap is not capability, it's <b>product</b>: model internals are
-  cheap to capture (a dozen forward hooks) and cheap to render (a canvas),
-  but nobody packaged them into the tool you'd reach for the way you reach
-  for browser devtools.</p>
+<div class="cover">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="3" y="3" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="12.5" y="3" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="3" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="3" y="12.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="12.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="3" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="12.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="16" r="3" fill="none" stroke="#FFF" stroke-width="1.6"/></svg>
+  <div>
+    <h1>model-graph — the transformer, made visible</h1>
+    <div class="sub">Product six-pager · July 2026 · model-graph.com ·
+      github.com/QSchlegel/model-graph · MIT</div>
+  </div>
+</div>
+<p class="abstract">A transformer is not a black box — it is a very long
+assembly line whose every station writes into one shared workspace.
+model-graph instruments that assembly line with forward hooks and streams
+what each station does, token by token, into your browser. This document
+walks the architecture the way the tool visualizes it, with real captured
+examples at every step.</p>
 
-  <h2><span>2</span>Tenets</h2>
-  <ol class="tenet">
-    <li><b>Live-first.</b> Internals stream <em>during</em> generation,
-      token by token — not post-hoc analysis of a saved run.</li>
-    <li><b>Honest pixels.</b> Nothing is rendered that wasn't measured.
-      Missing data says so, on the canvas, never faked.</li>
-    <li><b>Zero-friction adoption.</b> One process, OpenAI-compatible —
-      anything that speaks the OpenAI API gets instrumented for free.
-      A mock mode runs the full UI with no GPU and no weights.</li>
-    <li><b>Everything is testable.</b> Observability that can't gate a CI
-      run is a demo. Every run is recorded; internals carry assertions.</li>
-    <li><b>Tiny models are the lab.</b> Sub-2B models load in seconds and
-      exhibit the same phenomena worth studying — attention sinks, settle
-      depth, routing collapse, tool-call failures.</li>
-  </ol>
+<!-- ══════════════════ 1 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">1</span>One shared workspace: the residual stream</h2>
+<p>Every modern LLM is organized around a single tensor per token position
+— the <b>residual stream</b>. Layers do not pass data to each other like a
+pipeline; each layer <em>reads</em> the stream, computes something, and
+<em>adds</em> its contribution back. The stream is a shared bus, and depth
+is a sequence of edits to it.</p>
 
-  <h2><span>3</span>The product</h2>
-  <p><b>model-graph</b> is a self-hosted inspector with three faces on one
-  process:</p>
-  <ul>
-    <li><b>The chat</b> — a chat window whose <em>background is the
-      visualization</em>: layers × tokens heatmaps (MLP / attention /
-      residual writes, per-head fingerprint cells), a logit-lens layer
-      that dots every point where the model's prediction changes with
-      depth (red = where it settles on the final token), per-token
-      uncertainty, attention arcs showing where the selected token
-      looked, and a 3D residual trajectory with the full prompt context
-      as a linked trace. Click anything for a dashboard-grade cut-out;
-      arrow keys walk cells; touch-ready.</li>
-    <li><b>The dashboard</b> — block-registry drill-down (run › layer ›
-      block › part): head panels, MoE router flow and expert utilization,
-      SSM Δ, trace replay, deep-linkable from the chat's cut-outs.</li>
-    <li><b>The API</b> — OpenAI-compatible <code>/v1/chat/completions</code>
-      with streaming, tool calling (parsed into spec-compliant
-      <code>tool_calls</code>), and multimodal image parts — vision-language
-      chats are fully instrumented.</li>
-  </ul>
-  <p>Underneath: a websocket protocol any client can consume, a
-  <b>curator</b> that records every run and gates CI with checks and
-  tool-reasoning suites, and an <b>observable-ONNX</b> pipeline that
-  graph-surgeries residual streams into declared outputs — so even the
-  in-browser WebGPU engine shows real per-layer activity, serverless.</p>
+<figure>
+<svg viewBox="0 0 760 250" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+  <!-- residual bus -->
+  <rect x="20" y="112" width="720" height="26" rx="7" fill="#22344A"/>
+  <text x="30" y="129" fill="#EEF1F4" font-size="12">residual stream  h ∈ ℝ^d — one vector per token, edited by every block</text>
+  <!-- embed -->
+  <rect x="20" y="40" width="92" height="46" rx="8" fill="#D8DEE6" stroke="#6B7A8C"/>
+  <text x="34" y="59" font-size="11" fill="#22344A">tokens →</text>
+  <text x="34" y="74" font-size="11" fill="#22344A">embed</text>
+  <path d="M66 86 L66 112" stroke="#6B7A8C" stroke-width="2" fill="none"/>
+  <!-- layer i block -->
+  <g>
+    <rect x="150" y="20" width="300" height="74" rx="10" fill="none" stroke="#C9D2DB" stroke-dasharray="4 3"/>
+    <text x="162" y="14" font-size="10" fill="#6B7A8C">layer i  (× N)</text>
+    <rect x="162" y="30" width="128" height="52" rx="8" fill="#E39B2D"/>
+    <text x="174" y="52" font-size="11" fill="#22344A">token mixer</text>
+    <text x="174" y="68" font-size="10" fill="#22344A">attention / conv / ssm</text>
+    <rect x="306" y="30" width="128" height="52" rx="8" fill="#B02E3C"/>
+    <text x="318" y="52" font-size="11" fill="#EEF1F4">channel mixer</text>
+    <text x="318" y="68" font-size="10" fill="#EEF1F4">MLP (feed-forward)</text>
+    <!-- read/write arrows -->
+    <path d="M200 112 L200 82" stroke="#E39B2D" stroke-width="2" fill="none"/>
+    <path d="M252 82 L252 106" stroke="#E39B2D" stroke-width="2" fill="none"/>
+    <circle cx="252" cy="112" r="7" fill="#EEF1F4" stroke="#E39B2D" stroke-width="2"/>
+    <text x="248.5" y="116.5" font-size="11" fill="#22344A">+</text>
+    <path d="M344 112 L344 82" stroke="#B02E3C" stroke-width="2" fill="none"/>
+    <path d="M396 82 L396 106" stroke="#B02E3C" stroke-width="2" fill="none"/>
+    <circle cx="396" cy="112" r="7" fill="#EEF1F4" stroke="#B02E3C" stroke-width="2"/>
+    <text x="392.5" y="116.5" font-size="11" fill="#22344A">+</text>
+  </g>
+  <!-- lens taps -->
+  <path d="M480 138 L480 176" stroke="#6B7A8C" stroke-width="1.5" stroke-dasharray="2 3" fill="none"/>
+  <rect x="422" y="178" width="120" height="34" rx="8" fill="none" stroke="#6B7A8C" stroke-dasharray="3 3"/>
+  <text x="432" y="193" font-size="10" fill="#6B7A8C">logit lens: decode</text>
+  <text x="432" y="205" font-size="10" fill="#6B7A8C">the stream anywhere</text>
+  <!-- head -->
+  <rect x="560" y="40" width="90" height="46" rx="8" fill="#D8DEE6" stroke="#6B7A8C"/>
+  <text x="572" y="59" font-size="11" fill="#22344A">final norm</text>
+  <text x="572" y="74" font-size="11" fill="#22344A">+ unembed</text>
+  <path d="M605 112 L605 86" stroke="#6B7A8C" stroke-width="2" fill="none"/>
+  <rect x="672" y="40" width="68" height="46" rx="8" fill="#3E7CA8"/>
+  <text x="684" y="59" font-size="11" fill="#EEF1F4">logits</text>
+  <text x="684" y="74" font-size="11" fill="#EEF1F4">top-k</text>
+  <path d="M650 63 L672 63" stroke="#6B7A8C" stroke-width="2" fill="none"/>
+</svg>
+<figcaption>Fig 1 — the architecture model-graph instruments. Amber =
+token mixer (moves information <i>between</i> positions), red = channel
+mixer (transforms features <i>within</i> a position), ink = the residual
+bus both write into. Hooks capture every read/write; the lens decodes the
+bus after any layer.</figcaption>
+</figure>
 
-  <h2><span>4</span>Customer experience</h2>
-  <p><b>The agent developer.</b> Maria's agent calls the wrong tool once
-  in twenty runs. She points her existing OpenAI-SDK agent at
-  model-graph's base URL — zero code change — and reruns. The failing case
-  is auto-recorded; the strip shows the call token with 1.9 bits of
-  entropy and attention parked on the system-prompt sink instead of the
-  user's constraint. She adds the case to a curator suite with a
-  should-call assertion, tightens the tool description, and the suite
-  runs in CI from then on.</p>
-  <p><b>The interpretability tinkerer.</b> Kai wants to <em>see</em> logit
-  lens, not read about it. He asks "why is the sky blue" and watches the
-  ladder: garbage → 盐 → "salinity" → …settles on " because" at L10. He
-  drags the residual trajectory, finds the <code>&lt;|im_start|&gt;</code>
-  outlier, and has attention-sink intuition in an afternoon.</p>
-  <p><b>The educator.</b> A transformers lecture runs live on a
-  projector: type a prompt, watch conv and attention layers divide labour
-  in a hybrid model, click a head-fingerprint cell. Mock mode makes the
-  demo work on the podium laptop.</p>
-  <p><b>The evaluator.</b> A team comparing tiny models runs the same
-  reasoning suites across LFM2.5, SmolLM2 and Qwen3.5, diffing not just
-  accuracy but settle depth, uncertainty and attention focus — internals
-  as evaluation metrics, with regression pinning between checkpoints.</p>
+<p>This is why model-graph's core view is a <b>layers × tokens heatmap of
+write norms</b>: how hard did each station edit the workspace, at each
+step? Rows whose writes suddenly dominate are where decisions happen. In
+the app: modes <code>mlp</code> / <code>attn</code> / <code>resid</code>,
+row-normalized because absolute norms grow with depth.</p>
+</section>
 
-  <h2><span>5</span>How it works (and what it costs)</h2>
-  <p>A <code>HookedModel</code> wraps any HF causal or vision-language
-  model with forward hooks (eager attention) and yields one JSON frame per
-  token: block write norms, head norms, router weights, logit lens,
-  attention sources, entropy/margin, and a seeded 3D projection of every
-  residual. The API server fans frames out over a websocket (with last-run
-  replay), records runs, and serves the UIs — one process. In-browser
-  engines run curated ONNX models on WebGPU; the observable export exposes
-  <code>hidden.*</code> outputs so client-side JS computes the same
-  norms/trajectories from real tensors.</p>
-  <p>Cost of honesty: eager attention and per-token capture put
-  instrumented throughput at roughly chat speed (~5 tok/s for a 1.2B model
-  on an M-series laptop) — the right trade for an inspector.</p>
+<!-- ══════════════════ 2 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">2</span>The channel mixer: MLPs as memory</h2>
+<p>Two thirds of a transformer's parameters sit in its MLPs. The useful
+mental model (Geva et al., 2021): each MLP is a huge <b>key→value
+memory</b> — the first projection asks "which of my stored patterns match
+this position?", the second writes the matching values back into the
+stream.</p>
+<p><b>What the tool shows:</b> in <code>mlp</code> mode, factual and
+content tokens fire large writes in the middle layers — you can watch a
+lookup happen. Function words barely disturb the stream. And the
+diagnostic that matters for real work: <em>a wrong fact emitted with a
+big mid-depth MLP write means the model retrieved a wrong memory, not
+that it failed to plan</em> — a genuinely different bug.</p>
+<h3>Example, captured live</h3>
+<p>Asking LFM2.5-1.2B <em>"why is the sea salty?"</em>: the tokens
+<code>" minerals"</code> and <code>" dissolved"</code> ride hot MLP
+columns through L8–L13 while <code>" the"</code> and <code>" from"</code>
+stay pale — recall versus glue, visible at a glance.</p>
+<div class="callout">Per-head and per-expert structure lives one click
+deeper: the cut-out panel decomposes any attention cell into 32 head
+norms, and any MoE cell into router flow (see §4).</div>
+</section>
 
-  <h2><span>6</span>Open source plan</h2>
-  <p><b>License &amp; posture.</b> MIT. Single repo, batteries included;
-  no cloud dependency, no telemetry. The docs vault and AGENTS.md make the
-  repo legible to humans and AI agents alike — contributions are expected
-  from both.</p>
-  <p><b>Contribution ladder.</b> Suite cases and curator checks (no ML
-  background needed) → curated browser engines → dashboard consumers for
-  newer signals → observable-export coverage → new architecture
-  support.</p>
-  <p><b>Roadmap.</b> The reasoning program: reasoning suites with
-  internals-based expectations, a curated failure atlas, compare-driven
-  prompt evaluation, and fine-tuning loops gated by the same suites.</p>
-  <p><b>Success looks like:</b> issues that arrive with a run id attached;
-  suites in other projects' CI; a community-grown failure atlas; "point
-  your agent at it" becoming the default first debugging step for local
-  models.</p>
-  <p><b>FAQ.</b> <em>Why not TransformerLens/nnsight?</em> Research
-  libraries — powerful, offline, code-first. model-graph is a product:
-  live, visual, OpenAI-compatible, testable. They compose. <em>Does my
-  model work?</em> Any HF causal LM; hybrid, MoE and VL models are
-  first-class. <em>Do I need a GPU?</em> No — mock mode for the UI, WebGPU
-  browser engines for real inference without Python.</p>
+<!-- ══════════════════ 3 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">3</span>Depth is compute: the logit lens</h2>
+<p>Because every layer only <em>edits</em> the shared stream, you can
+decode the stream after any layer through the model's own final norm and
+unembedding — as if the network stopped there. That is the <b>logit
+lens</b>. model-graph computes it for every token and marks every layer
+where the prediction <em>changes</em> with a dot; red where it flips to
+the token actually emitted — the <b>settle layer</b>.</p>
+<h3>A real ladder</h3>
+<figure>
+<div class="ladder">
+  <div class="lr"><span class="l">L00</span><span class="w">"ty"</span><span class="p">100%</span></div>
+  <div class="lr chg"><span class="l">L08</span><span class="w">"by"</span><span class="p">0%</span></div>
+  <div class="lr chg"><span class="l">L01</span><span class="w">" salt"</span><span class="p">25%</span></div>
+  <div class="lr chg"><span class="l">L09</span><span class="w">" Finger"</span><span class="p">1%</span></div>
+  <div class="lr chg"><span class="l">L02</span><span class="w">"盐"</span><span class="p">7%</span></div>
+  <div class="lr settle"><span class="l">L10</span><span class="w">" because"</span><span class="p">79%</span></div>
+  <div class="lr"><span class="l">L03</span><span class="w">"盐"</span><span class="p">3%</span></div>
+  <div class="lr"><span class="l">L11</span><span class="w">" because"</span><span class="p">82%</span></div>
+  <div class="lr chg"><span class="l">L04</span><span class="w">" salinity"</span><span class="p">0%</span></div>
+  <div class="lr"><span class="l">L12</span><span class="w">" because"</span><span class="p">95%</span></div>
+  <div class="lr chg"><span class="l">L05</span><span class="w">"Prot"</span><span class="p">1%</span></div>
+  <div class="lr"><span class="l">L13</span><span class="w">" because"</span><span class="p">96%</span></div>
+  <div class="lr chg"><span class="l">L07</span><span class="w">" undert"</span><span class="p">1%</span></div>
+  <div class="lr"><span class="l">L15</span><span class="w">" because"</span><span class="p">100%</span></div>
+</div>
+<figcaption>Fig 2 — logit lens for the token <code>" because"</code>
+(LFM2.5-1.2B, real capture). The topic surfaces early in whatever surface
+form is handy — <code>" salt"</code>, then salt <i>in Chinese</i> — the
+middle layers churn, and the answer settles at L10 of 16. Highlighted
+rows are prediction flips; the red row is the settle layer.</figcaption>
+</figure>
+<p><b>Why it matters:</b> settle depth is a per-token difficulty meter.
+Echoed and grammatical tokens settle in the first third; genuine choices
+stay contested. If the lens settles at L10/16, the last six layers mostly
+calibrated — the measured intuition behind early-exit and speculative
+decoding. Paired with per-token <b>entropy</b> (bits of uncertainty in
+the final distribution), you see <em>where in depth</em> and <em>when in
+time</em> the model made up its mind.</p>
+</section>
+
+<!-- ══════════════════ 4 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">4</span>The token mixer: attention, heads, routing</h2>
+<p>Attention is the only place information moves <em>between</em>
+positions. For every generated token, model-graph captures where it
+looked (mean over heads, top sources) and how spread that attention was —
+drawn as <b>arcs over the token strip</b>.</p>
+<figure>
+<svg viewBox="0 0 720 150" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+  <g font-size="11">
+    <path d="M580 108 Q 400 18 208 108" stroke="rgba(176,46,60,.85)" stroke-width="3.5" fill="none"/>
+    <path d="M580 108 Q 460 40 336 108" stroke="rgba(176,46,60,.55)" stroke-width="2.5" fill="none"/>
+    <path d="M580 108 Q 500 58 464 108" stroke="rgba(176,46,60,.4)" stroke-width="2" fill="none"/>
+    <text x="20" y="30" fill="#3E7CA8">◂ context 55%  (mass on the prompt — 29% on the &lt;|im_start|&gt; sink)</text>
+  </g>
+  <g font-size="11" fill="#22344A">
+    <rect x="20" y="108" width="120" height="22" rx="5" fill="#D8DEE6"/><text x="30" y="123">John</text>
+    <rect x="148" y="108" width="120" height="22" rx="5" fill="#E8C89A"/><text x="158" y="123">" has"  5.2%</text>
+    <rect x="276" y="108" width="120" height="22" rx="5" fill="#E5B26B"/><text x="286" y="123">" 6"  4.0%</text>
+    <rect x="404" y="108" width="120" height="22" rx="5" fill="#D8DEE6"/><text x="414" y="123">" apples"</text>
+    <rect x="532" y="108" width="96" height="22" rx="5" fill="#B02E3C"/><text x="542" y="123" fill="#EEF1F4">"."  ← t</text>
+  </g>
+</svg>
+<figcaption>Fig 3 — attention sources for one token (L12, real capture
+from the apples arithmetic prompt). Arc weight = attention mass. Note the
+blue aggregate: over half the mass sits on the prompt — much of it parked
+on the first-token <b>attention sink</b>, not on the numbers.</figcaption>
+</figure>
+<p><b>Reading heads:</b> in <code>attn</code> mode each attention cell
+subdivides into a per-head grid — the cell's <em>fingerprint</em>.
+Recurring stripes when text repeats are induction-style copying;
+fire-on-everything heads are usually sink-parking. Distinguishing "moved
+information" from "parked attention" is the core skill this view
+teaches.</p>
+<h3>When routing replaces density: MoE</h3>
+<div class="bars">
+  <div class="b"><span class="l">router · E6</span><span class="t"><span class="f" style="width:74%"></span></span><span class="v">74%</span></div>
+  <div class="b"><span class="l">router · E4</span><span class="t"><span class="f" style="width:26%"></span></span><span class="v">26%</span></div>
+</div>
+<p style="font-size:12.5px;color:var(--muted);margin-top:6px">For MoE
+layers the cut-out shows which experts the router chose per token and the
+routing-mass distribution across the whole run — expert collapse and load
+imbalance are visible as a lopsided histogram.</p>
+</section>
+
+<!-- ══════════════════ 5 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">5</span>Beyond vanilla: hybrids, and the stream as a
+shape</h2>
+<h3>Hybrid layer stacks</h3>
+<figure>
+<svg viewBox="0 0 720 64" xmlns="http://www.w3.org/2000/svg" font-family="ui-monospace,Menlo,monospace">
+  <g font-size="12">
+    <rect x="10" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="24" y="30" fill="#fff">C</text>
+    <rect x="54" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="68" y="30" fill="#fff">C</text>
+    <rect x="98" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="112" y="30" fill="#fff">A</text>
+    <rect x="142" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="156" y="30" fill="#fff">C</text>
+    <rect x="186" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="200" y="30" fill="#fff">C</text>
+    <rect x="230" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="244" y="30" fill="#fff">A</text>
+    <rect x="274" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="288" y="30" fill="#fff">C</text>
+    <rect x="318" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="332" y="30" fill="#fff">C</text>
+    <rect x="362" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="376" y="30" fill="#fff">A</text>
+    <rect x="406" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="420" y="30" fill="#fff">C</text>
+    <rect x="450" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="464" y="30" fill="#fff">A</text>
+    <rect x="494" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="508" y="30" fill="#fff">C</text>
+    <rect x="538" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="552" y="30" fill="#fff">A</text>
+    <rect x="582" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="596" y="30" fill="#fff">C</text>
+    <rect x="626" y="10" width="38" height="30" rx="6" fill="#B02E3C"/><text x="640" y="30" fill="#fff">A</text>
+    <rect x="670" y="10" width="38" height="30" rx="6" fill="#8B98A7"/><text x="684" y="30" fill="#fff">C</text>
+    <text x="10" y="58" font-size="10" fill="#6B7A8C">LFM2.5-1.2B: 10 gated short-conv layers (C, local mixing) + 6 global-attention layers (A, long-range retrieval)</text>
+  </g>
+</svg>
+<figcaption>Fig 4 — the hybrid stack model-graph runs by default. The
+efficiency race (conv/SSM/linear-attention hybrids) makes <i>which layer
+kind does what</i> a first-class question — compare A vs C rows in attn
+mode to watch the division of labour.</figcaption>
+</figure>
+<h3>The stream as a shape: embedding trajectories</h3>
+<p>Each token's residual is a point in ℝ^d. Projected through a fixed
+random 3D basis (seeded — no refitting drift), generation traces a
+<b>path</b>: the prompt context as a blue dotted trace, generation
+walking out of it. The view auto-rotates and replays the generation step
+by step, endlessly.</p>
+<ul>
+  <li><b>Anisotropy</b>, visible: hidden states occupy a narrow cone, and
+    special tokens (<code>&lt;|im_start|&gt;</code>) sit as huge-norm
+    outliers — attention sinks in embedding form.</li>
+  <li><b>Loops</b> = the model cycling similar states (lists,
+    repetition); <b>long jumps</b> = genuine semantic movement.</li>
+  <li>Generation <b>orbiting the context cluster</b> reads as grounded;
+    drifting far from it can be creativity — or hallucination.</li>
+</ul>
+<div class="callout">All of this works serverless too: an
+observable-ONNX export declares every layer's residual as a graph output,
+so the in-browser WebGPU engine computes resid norms and trajectories
+from real tensors — validated against PyTorch hooks (argmax parity, norm
+drift within q4f16 noise).</div>
+</section>
+
+<!-- ══════════════════ 6 ══════════════════ -->
+<section class="pg">
+<h2><span class="n">6</span>The product around the physics</h2>
+<p><b>Zero-friction:</b> one process speaks the OpenAI API — point any
+SDK or agent at it and every request is instrumented. Tool calls are
+parsed into spec-compliant <code>tool_calls</code>; vision-language
+models hook the language tower, so image chats are inspectable.</p>
+<p><b>Testable:</b> a curator records every run and gates CI with checks
+over internals (finite norms, depth trend, settle depth, uncertainty,
+attention focus) and tool-reasoning suites — should-call, abstain,
+argument extraction, result-grounded chains. Failures arrive with a run
+id and full internals attached.</p>
+<p><b>Example of the loop closing:</b> asked <em>"John has 3 apples,
+buys 2, eats 1"</em>, the model answered <b>6</b> — and the capture
+shows why it's plausible: the answer token's attention parked 40% on the
+<code>&lt;|im_start|&gt;</code> sink instead of the numbers (Fig 3), and
+the lens shows "6" never seriously contested in depth. That failure is
+now a suite case; the suite is the regression gate.</p>
+<p><b>Honest pixels, everywhere:</b> nothing is rendered that wasn't
+measured. Missing signals say so on the canvas — per-head matrices,
+browser-run limits, all of it.</p>
+<p><b>Open source:</b> MIT, single repo, no telemetry.
+<a href="https://model-graph.com">model-graph.com</a> (live demo on a
+mock backend) · <a href="https://github.com/QSchlegel/model-graph">
+github.com/QSchlegel/model-graph</a> — quickstart, contribution ladder
+and the docs vault (architecture &amp; flow graphs) are in the repo.
+By <a href="https://quirinschlegel.com">Quirin Schlegel</a>.</p>
+</section>
+
 </div></main>
 </body>
 </html>
