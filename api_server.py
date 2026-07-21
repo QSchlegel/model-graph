@@ -409,6 +409,11 @@ def make_app(backend: Backend, hub: Hub, cur=None):
         return web.FileResponse(os.path.join(WEB, "intro.html"),
                                 headers=NOCACHE)
 
+    async def og_image(_request):
+        return web.FileResponse(
+            os.path.join(WEB, "og.png"),
+            headers={"Cache-Control": "public, max-age=86400"})
+
     CANON = "https://model-graph.com"
     PAGES = ["/", "/chat", "/dashboard", "/intro", "/six-pager", "/blog/",
              "/blog/see-your-model-think.html",
@@ -464,6 +469,7 @@ def make_app(backend: Backend, hub: Hub, cur=None):
     app.router.add_get("/chat", chat_page)
     app.router.add_get("/dashboard", dash_page)
     app.router.add_get("/intro", intro_page)
+    app.router.add_get("/og.png", og_image)
     app.router.add_get("/six-pager", sixpager_page)
     app.router.add_get("/blog", blog_index)
     app.router.add_get("/blog/", blog_index)
