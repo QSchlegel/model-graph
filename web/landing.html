@@ -175,6 +175,7 @@
   .hero-in h1{font-size:clamp(26px,5.6vw,34px)}
   @media (max-width:640px){
     header{padding:8px 10px;gap:8px}
+    .brand span{display:none}               /* logo only — links get the room */
     header nav{font-size:12px}
     header nav a{padding:6px 7px}
     .hero-in{padding:48px 14px 56px}
@@ -213,15 +214,12 @@
 <header>
   <a class="brand" href="/">
     <svg class="lgo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="3" y="3" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="12.5" y="3" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="3" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="3" y="12.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="12.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="3" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="12.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="16" r="3" fill="none" stroke="#FFFFFF" stroke-width="1.6"/></svg>
-    model-graph
+    <span>model-graph</span>
   </a>
   <nav>
     <a class="hot" href="/chat">chat</a>
     <a href="/dashboard">dashboard</a>
     <a href="/intro">intro</a>
-    <a href="#inside">inside</a>
-    <a href="#ryo">run</a>
-    <a href="#contribute">contribute</a>
     <a href="/six-pager">six-pager</a>
     <a href="/blog/">blog</a>
     <a href="https://github.com/QSchlegel/model-graph">github</a>
