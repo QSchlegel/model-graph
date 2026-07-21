@@ -143,6 +143,35 @@
          background:rgba(255,255,255,.45);
          -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
   footer a{margin:0 8px}
+  /* inside-a-transformer walkthrough */
+  #insidecard:hover{transform:none}
+  #inside-cv{width:100%;height:290px;display:block;margin:10px 0 12px;
+        border:1px solid rgba(255,255,255,.7);border-radius:8px;
+        background:rgba(238,241,244,.72);touch-action:pan-y}
+  .ivar{display:flex;gap:6px 16px;align-items:center;flex-wrap:wrap;
+        font-size:11px;color:var(--muted)}
+  .ivg{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{font:11px var(--mono);padding:4px 10px;border:1px solid var(--line);
+        border-radius:20px;background:rgba(255,255,255,.55);cursor:pointer;
+        color:var(--muted)}
+  .chip:hover{border-color:var(--ink);color:var(--ink)}
+  .chip.on{border-color:var(--ink);color:var(--ink);
+        background:rgba(255,255,255,.95);font-weight:600}
+  .istep{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+        margin-bottom:10px}
+  .ibtn{font:13px var(--mono);border:1px solid var(--ink);border-radius:5px;
+        background:rgba(255,255,255,.7);padding:4px 11px;cursor:pointer;
+        color:var(--ink)}
+  .ibtn:hover{background:var(--ink);color:var(--panel)}
+  .ipills{display:flex;gap:4px;flex-wrap:wrap}
+  .ipill{font:10.5px var(--mono);padding:3px 9px;border-radius:12px;
+        border:1px solid var(--line);background:transparent;
+        color:var(--muted);cursor:pointer}
+  .ipill:hover{border-color:var(--ink);color:var(--ink)}
+  .ipill.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+  #ititle{font-size:14px;margin:2px 0 4px}
+  #itext{font-size:12.5px;color:var(--ink);min-height:4em}
+  #ilive{font-size:11.5px;color:var(--muted);margin-top:6px}
   .hero-in h1{font-size:clamp(26px,5.6vw,34px)}
   @media (max-width:640px){
     header{padding:8px 10px;gap:8px}
@@ -157,6 +186,11 @@
     table{font-size:11.5px;min-width:430px}
     footer a{display:inline-block;padding:6px 4px}
     .card canvas{height:150px}
+    #inside-cv{height:235px}
+    .ivg{width:100%}                        /* one variant group per row */
+    .ibtn{padding:7px 13px}                 /* finger targets */
+    .ipill{padding:5px 9px}
+    #itext{min-height:6em}
   }
   .lgo rect:not(:first-of-type){animation:lgoPulse 2.6s ease-in-out infinite}
   .lgo rect:nth-of-type(2){animation-delay:0s}
@@ -184,6 +218,7 @@
   <nav>
     <a class="hot" href="/chat">chat</a>
     <a href="/dashboard">dashboard</a>
+    <a href="#inside">inside</a>
     <a href="#ryo">run</a>
     <a href="#contribute">contribute</a>
     <a href="/six-pager">six-pager</a>
@@ -237,6 +272,32 @@
          (mean over heads) drawn as arcs over the token strip, with
          per-token uncertainty (entropy + margin) riding on every frame.</p>
     </div>
+  </div>
+</section>
+
+<section id="inside">
+  <h2>Inside a transformer · step by step</h2>
+  <div class="card" id="insidecard">
+    <div class="ivar">
+      <span class="ivg"><span class="ivlbl">token mixer</span>
+        <button class="chip on" data-g="mix" data-v="attn">attention · GPT-style</button>
+        <button class="chip" data-g="mix" data-v="conv">hybrid conv · LFM2-style</button>
+      </span>
+      <span class="ivg"><span class="ivlbl">channel mixer</span>
+        <button class="chip on" data-g="mlp" data-v="dense">dense MLP</button>
+        <button class="chip" data-g="mlp" data-v="moe">MoE router</button>
+      </span>
+    </div>
+    <canvas id="inside-cv"></canvas>
+    <div class="istep">
+      <button class="ibtn" id="iprev" title="previous step">◂</button>
+      <button class="ibtn" id="iplay" title="pause / auto-play">⏸</button>
+      <button class="ibtn" id="inext" title="next step">▸</button>
+      <div class="ipills" id="ipills"></div>
+    </div>
+    <h3 id="ititle"></h3>
+    <p id="itext"></p>
+    <p id="ilive"></p>
   </div>
 </section>
 
@@ -504,6 +565,427 @@ function fit(cv){
     requestAnimationFrame(draw);
   }
   draw();
+})();
+
+// inside a transformer: step-by-step animated walkthrough, variant-aware
+(()=>{
+const cv=document.getElementById('inside-cv');
+if(!cv)return;
+const TOK=['The',' capital',' of',' France',' is'],
+      IDS=[464,6534,286,5054,318],PRED=' Paris';
+const VAR={mix:'attn',mlp:'dense'};
+const rnd=(i,j)=>{const s=Math.sin(i*127.1+j*311.7)*43758.5453;
+                  return s-Math.floor(s);};
+const ez=u=>u<=0?0:u>=1?1:u*u*(3-2*u);
+const F=s=>s+'px ui-monospace,Menlo,monospace';
+const qp=(x0,y0,cx,cy,x1,y1,u)=>{const a=1-u;
+  return [a*a*x0+2*a*u*cx+u*u*x1,a*a*y0+2*a*u*cy+u*u*y1];};
+
+const STEPS=[
+ {p:'tokenize',c:4,
+  t:()=>'1 · tokenize — text becomes ids',
+  d:()=>'The model never sees letters. A fixed vocabulary (50–130k learned '+
+    'pieces) splits the prompt into tokens — frequent words are one piece, '+
+    'rare ones shatter into several. From here on, each token is just an '+
+    'integer.',
+  l:()=>'in model-graph: the token strip on every view is exactly this '+
+    'sequence.'},
+ {p:'embed',c:4.5,
+  t:()=>'2 · embed — every id becomes a vector',
+  d:()=>'A lookup table maps each id to a learned vector (hundreds to '+
+    'thousands of dimensions). That vector IS the residual stream: the '+
+    'running state, one per position, that everything downstream reads '+
+    'from and writes into.',
+  l:()=>'in model-graph: viz · embed projects these vectors into a fixed '+
+    '3D basis and replays their drift.'},
+ {p:'mix tokens',c:5.5,
+  t:()=>VAR.mix==='attn'
+    ?'3 · mix tokens — attention reads the past'
+    :'3 · mix tokens — a gated short conv (hybrid)',
+  d:()=>VAR.mix==='attn'
+    ?'Each position asks a question (query); every earlier position offers '+
+     'a key. The match decides how much of each value flows in — " is" '+
+     'pulls hardest on " France". Not magic: a learned, weighted average '+
+     'over the past, per head.'
+    :'Hybrid designs (LFM2, Mamba-style) replace most attention with a '+
+     'gated short convolution: each position blends a small fixed window '+
+     'of neighbours. No n² comparisons, constant state — long context '+
+     'gets cheap. A few real attention layers remain for global recall.',
+  l:()=>VAR.mix==='attn'
+    ?'in model-graph: click any token in the chat — its real attention '+
+     'arcs and per-head panels.'
+    :'in model-graph: C rows in the heatmap are these conv mixers — '+
+     'compare their writes against the A rows.'},
+ {p:'mix channels',c:5.5,
+  t:()=>VAR.mlp==='dense'
+    ?'4 · mix channels — the MLP, a key→value memory'
+    :'4 · mix channels — MoE: a router picks experts',
+  d:()=>VAR.mlp==='dense'
+    ?'Expand ~4×, nonlinearity, contract. Most of the parameters live '+
+     'here, acting like a key→value memory: patterns in the vector '+
+     'trigger stored facts to be written back. No token talks to another '+
+     'in this block — it is strictly per-position.'
+    :'Instead of one big MLP: N small experts and a router that sends '+
+     'each token to its top-2. Capacity scales with all experts, compute '+
+     'only with the chosen few — and which expert fires per token '+
+     'becomes visible, measurable structure.',
+  l:()=>VAR.mlp==='dense'
+    ?'in model-graph: viz · mlp is exactly this block’s write strength, '+
+     'per layer × token.'
+    :'in model-graph: the cut-out panel streams real router weights and '+
+     'expert utilization per token.'},
+ {p:'stack',c:5.5,
+  t:()=>'5 · the residual stream — layers add, never replace',
+  d:()=>'x ← x + mix(x); x ← x + mlp(x) — dozens of times. Every block '+
+    'reads the shared stream and adds its edit; norms keep scales sane. '+
+    (VAR.mix==='conv'
+      ?'The C/A interleave shown here is LFM2.5’s real layout. '
+      :'')+
+    'Because it is additive, each layer’s contribution can be measured '+
+    'on its own.',
+  l:()=>'in model-graph: heatmap rows are these blocks — hot cells are '+
+    'big writes into the stream.'},
+ {p:'readout',c:5.5,
+  t:()=>'6 · readout — logits, softmax, logit lens',
+  d:()=>'The last position’s vector is normed, then dotted against every '+
+    'vocabulary embedding: logits → softmax → probabilities. The logit '+
+    'lens runs this same readout at EVERY layer — the prediction forms '+
+    'with depth and settles; settle depth ≈ difficulty.',
+  l:()=>'in model-graph: lens dots mark real flips; red = settled on the '+
+    'token actually emitted.'},
+ {p:'loop',c:4.5,
+  t:()=>'7 · sample & loop — one token per forward pass',
+  d:()=>'Pick from the distribution (argmax at T=0), append, run again — '+
+    'earlier keys/values are cached, so each new token costs one pass. '+
+    'Everything above happens once per generated token.',
+  l:()=>'in model-graph: open the chat and send a message — this exact '+
+    'loop, instrumented live.'}];
+
+function rrect(c,x,y,w,h,r){
+  c.beginPath();
+  if(c.roundRect)c.roundRect(x,y,w,h,r);else c.rect(x,y,w,h);
+}
+function chipRow(c,W,y,list,n,hot,pops){
+  const cw=Math.min(94,(W-24)/list.length),
+        x0=(W-cw*list.length)/2,ctrs=[];
+  c.textAlign='center';
+  list.forEach((w,i)=>{
+    ctrs.push(x0+i*cw+cw/2);
+    if(i>=n)return;
+    let s=1;
+    if(pops&&pops[i]!==undefined&&pops[i]<1)s=1+.3*(1-ez(pops[i]));
+    const pw=(cw-6)*s,ph=20*s;
+    c.fillStyle=i===hot?'rgba(176,46,60,.12)':'rgba(255,255,255,.9)';
+    c.strokeStyle=i===hot?H2:LINE;
+    rrect(c,ctrs[i]-pw/2,y-ph/2,pw,ph,5);c.fill();c.stroke();
+    c.fillStyle=i===hot?H2:INK;c.font=F(10);
+    c.fillText(w.trim().slice(0,8)||'·',ctrs[i],y+3.5);
+  });
+  c.textAlign='left';
+  return {cw,ctrs};
+}
+function vcol(c,cx,yt,i,p,glow){            // 8-cell vector column
+  for(let j=0;j<8;j++){
+    c.fillStyle=p*8>j?heat(.15+.8*rnd(i,j)):'rgba(201,210,219,.35)';
+    c.fillRect(cx-6.5,yt+j*11,13,10);
+  }
+  if(glow>0){
+    c.strokeStyle=`rgba(227,155,45,${glow})`;c.lineWidth=2;
+    c.strokeRect(cx-8.5,yt-2,17,8*11+3);c.lineWidth=1;
+  }
+}
+function arrow(c,x0,y0,x1,y1,p,col){
+  if(p<=0)return;
+  const x=x0+(x1-x0)*ez(p),y=y0+(y1-y0)*ez(p);
+  c.strokeStyle=col||MUT;
+  c.beginPath();c.moveTo(x0,y0);c.lineTo(x,y);c.stroke();
+  if(p>=1){
+    const a=Math.atan2(y1-y0,x1-x0);
+    c.beginPath();c.moveTo(x1,y1);
+    c.lineTo(x1-6*Math.cos(a-.45),y1-6*Math.sin(a-.45));
+    c.lineTo(x1-6*Math.cos(a+.45),y1-6*Math.sin(a+.45));
+    c.closePath();c.fillStyle=col||MUT;c.fill();
+  }
+}
+function cap(c,W,H,left,right){
+  c.fillStyle=MUT;
+  let f=10;c.font=F(f);                     // shrink, then ellipsize to fit
+  while(f>8&&c.measureText(left).width>W-24){f--;c.font=F(f);}
+  if(c.measureText(left).width>W-24){
+    while(left.length>8&&c.measureText(left+'…').width>W-24)
+      left=left.slice(0,-1);
+    left+='…';
+  }
+  c.fillText(left,12,H-11);
+  if(right&&W>560){
+    c.textAlign='right';c.fillText(right,W-12,H-11);c.textAlign='left';
+  }
+}
+
+function sTok(c,W,H,u){
+  c.font=F(11);c.textAlign='center';
+  c.fillStyle=`rgba(34,52,74,${u<.15?1:.35})`;
+  c.fillText('"The capital of France is"',W/2,34);
+  const n=Math.max(0,Math.min(5,Math.floor((u-.1)/.13)+1));
+  const pops=TOK.map((_,i)=>(u-(.1+i*.13))/.1);
+  const {ctrs}=chipRow(c,W,H*.44,TOK,n,-1,pops);
+  c.textAlign='center';c.font=F(9);c.fillStyle=MUT;
+  for(let i=0;i<n;i++)
+    if(pops[i]>1)c.fillText('#'+IDS[i],ctrs[i],H*.44+26);
+  c.textAlign='left';
+  cap(c,W,H,'vocabulary lookup · one integer per piece');
+}
+function sEmb(c,W,H,u){
+  const y=38,{ctrs}=chipRow(c,W,y,TOK,5,-1);
+  TOK.forEach((_,i)=>{
+    const p=ez((u-.05-i*.08)/.35);
+    if(p>0){
+      c.strokeStyle=LINE;
+      c.beginPath();c.moveTo(ctrs[i],y+11);c.lineTo(ctrs[i],y+24);c.stroke();
+    }
+    vcol(c,ctrs[i],y+28,i,p,0);
+  });
+  cap(c,W,H,'E[id] → vector · this IS the residual stream',
+    '2048 dims → 8 drawn');
+}
+function sMix(c,W,H,u){
+  const y=64,{cw,ctrs}=chipRow(c,W,y,TOK,5,4);
+  const vt=y+22;
+  TOK.forEach((_,i)=>vcol(c,ctrs[i],vt,i,1,i===4?ez((u-.55)/.3)*.9:0));
+  const qx=ctrs[4],qy=y-12;
+  if(VAR.mix==='attn'){
+    const WGT=[[3,.55],[1,.22],[0,.09],[2,.05]];
+    c.font=F(9);c.textAlign='center';
+    WGT.forEach(([s,w],j)=>{
+      const a=ez((u-.06-j*.09)/.12);
+      if(a<=0)return;
+      const sx=ctrs[s],cy2=Math.max(10,y-52-70*w);
+      c.strokeStyle=`rgba(176,46,60,${(.2+.65*w)*a})`;
+      c.lineWidth=1+3*w;
+      c.beginPath();c.moveTo(qx,qy);
+      c.quadraticCurveTo((qx+sx)/2,cy2,sx,qy);c.stroke();
+      const[ax,ay]=qp(qx,qy,(qx+sx)/2,cy2,sx,qy,.5);
+      c.fillStyle=`rgba(176,46,60,${a})`;
+      c.fillText((w*100).toFixed(0)+'%',ax,ay-5);
+      const v=(u*1.4+j*.27)%1;
+      const[px,py]=qp(sx,qy,(qx+sx)/2,cy2,qx,qy,v);
+      c.beginPath();c.arc(px,py,2.2,0,7);c.fill();
+    });
+    c.lineWidth=1;c.textAlign='left';
+    cap(c,W,H,'q·k match → softmax → weighted sum of values flows into " is"');
+  }else{
+    const x0=ctrs[2]-cw/2+2,x1=ctrs[4]+cw/2-2;
+    c.setLineDash([3,3]);c.strokeStyle=INK;
+    rrect(c,x0,y-14,x1-x0,28,7);c.stroke();c.setLineDash([]);
+    c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+    [['w₂ ·2',2],['w₁ ·3',1],['w₀ ·5',0]].forEach(([lb,k])=>
+      c.fillText(lb,ctrs[4-k],y-22));
+    [[2,.2],[3,.3]].forEach(([s,w],j)=>{
+      const sx=ctrs[s],cy2=y-34;
+      c.strokeStyle=`rgba(176,46,60,${.3+w})`;c.lineWidth=1+2*w;
+      c.beginPath();c.moveTo(sx,qy);
+      c.quadraticCurveTo((sx+qx)/2,cy2,qx,qy);c.stroke();
+      const v=(u*1.4+j*.4)%1;
+      const[px,py]=qp(sx,qy,(sx+qx)/2,cy2,qx,qy,v);
+      c.fillStyle=H2;c.beginPath();c.arc(px,py,2.2,0,7);c.fill();
+    });
+    c.lineWidth=1;c.textAlign='left';
+    cap(c,W,H,'fixed local window · gated · O(1) state',
+      'A layers handle global recall');
+  }
+}
+function sMlp(c,W,H,u){
+  const midY=H*.47,inX=W*.14,exX=W*.46,outX=W*.84;
+  vcol(c,inX,midY-44,4,1,0);
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  c.fillText('from stream',inX,midY+58);
+  if(VAR.mlp==='dense'){
+    arrow(c,inX+12,midY,exX-40,midY,u/.15);
+    const gp=ez((u-.15)/.4);
+    for(let cc=0;cc<4;cc++)for(let j=0;j<8;j++){
+      const on=gp*32>cc*8+j;
+      c.fillStyle=on?heat(.15+.8*rnd(9+cc,j)):'rgba(201,210,219,.3)';
+      c.fillRect(exX-32+cc*16,midY-44+j*11,14,10);
+    }
+    c.fillStyle=MUT;
+    c.fillText('×4 expand · nonlinearity',exX,midY-54);
+    arrow(c,exX+36,midY,outX-14,midY,(u-.55)/.15);
+    vcol(c,outX,midY-44,13,ez((u-.6)/.3),ez((u-.85)/.15)*.8);
+    c.fillText('+ back into stream',outX,midY+58);
+    c.textAlign='left';
+    cap(c,W,H,'most parameters live here · strictly per-position');
+  }else{
+    const rX=W*.36,eX=W*.56;
+    arrow(c,inX+12,midY,rX-32,midY,u/.15);
+    c.fillStyle='rgba(255,255,255,.9)';c.strokeStyle=INK;
+    rrect(c,rX-30,midY-11,60,22,5);c.fill();c.stroke();
+    c.fillStyle=INK;c.fillText('router',rX,midY+3);
+    const CH={2:.61,5:.27};
+    for(let e=0;e<8;e++){
+      const col=e%4,row=e>>2,x=eX+col*(W*.3/4),y=midY-34+row*36;
+      const w=CH[e],lit=w&&u>.3+e*.02;
+      c.fillStyle=lit?heat(.35+w):'rgba(255,255,255,.6)';
+      c.strokeStyle=lit?INK:LINE;
+      rrect(c,x,y,W*.3/4-6,24,4);c.fill();c.stroke();
+      c.fillStyle=lit?INK:MUT;
+      c.fillText('E'+e,x+(W*.3/4-6)/2,y+15);
+      if(lit)c.fillText((w*100).toFixed(0)+'%',x+(W*.3/4-6)/2,y-5);
+      if(w&&u>.25){
+        c.strokeStyle=`rgba(176,46,60,${.3+w})`;
+        c.beginPath();c.moveTo(rX+30,midY);
+        c.lineTo(x,y+12);c.stroke();
+      }
+    }
+    c.textAlign='left';
+    cap(c,W,H,'top-2 of 8 experts · capacity ∝ all, compute ∝ chosen');
+  }
+}
+function sStack(c,W,H,u){
+  const P=(VAR.mix==='attn'?'AAAAAAAAAAAA':'CCACCACCACAC').split('');
+  const rows=12,top=22,rh=(H-58-top)/rows,bx=W*.24;
+  const r=Math.min(rows-1,Math.floor(u*rows));
+  P.forEach((k,i)=>{
+    const y=top+i*rh,act=i===r,done=i<r;
+    c.font=F(9);c.fillStyle=MUT;
+    c.fillText('L'+String(i).padStart(2,'0'),bx-56,y+rh/2+3);
+    c.fillStyle=k==='C'?'#8B98A7':H2;
+    c.fillText(k,bx-28,y+rh/2+3);
+    [VAR.mix==='conv'&&k==='C'?'conv':'attn',
+     VAR.mlp==='moe'?'moe':'mlp'].forEach((lb,b)=>{
+      const x=bx+b*56;
+      c.fillStyle=act?heat(b?.75:.45)
+        :done?'rgba(227,155,45,.25)':'rgba(255,255,255,.75)';
+      c.strokeStyle=act?INK:LINE;
+      c.fillRect(x,y+1.5,48,rh-4);c.strokeRect(x,y+1.5,48,rh-4);
+      if(act){c.fillStyle=INK;c.fillText(lb,x+5,y+rh/2+3);}
+    });
+  });
+  const rbx=W*.72,rbw=26;
+  c.strokeStyle=LINE;c.strokeRect(rbx,top,rbw,rows*rh);
+  for(let i=0;i<=r;i++){
+    c.fillStyle=heat(.2+.75*rnd(i,3));
+    c.fillRect(rbx+1,top+i*rh+1,rbw-2,rh-2);
+  }
+  arrow(c,bx+112,top+r*rh+rh/2,rbx-6,top+r*rh+rh/2,1,H2);
+  c.font=F(9);c.fillStyle=MUT;c.textAlign='center';
+  c.fillText('residual stream',rbx+rbw/2,top+rows*rh+14);
+  c.textAlign='left';
+  cap(c,W,H,'x ← x + block(x) — every layer ADDS its edit');
+}
+function sRead(c,W,H,u){
+  const rows=12,top=24,rh=(H-58-top)/rows;
+  const lens=['the','the','a','a','city','city','Lyon','Paris',
+              'Paris','Paris','Paris','Paris'];
+  const vis=Math.floor(ez(u/.75)*rows);
+  c.font=F(9);
+  for(let i=0;i<vis;i++){
+    const y=top+i*rh,settled=lens[i]==='Paris',
+          chg=i>0&&lens[i]!==lens[i-1];
+    if(chg){c.fillStyle='rgba(227,155,45,.5)';c.fillRect(12,y,2,rh-2);}
+    c.fillStyle=MUT;
+    c.fillText('L'+String(i).padStart(2,'0'),18,y+rh/2+3);
+    c.fillStyle=settled?H2:INK;
+    c.fillText(lens[i],48,y+rh/2+3);
+  }
+  const P5=[[' Paris',.72],[' Lyon',.06],[' London',.05],
+            [' the',.04],[' France',.02]];
+  const bx=W*.42,bw=W*.5-52;
+  c.fillStyle=MUT;
+  c.fillText('final norm → unembed → softmax',bx,top-6);
+  P5.forEach(([w2,p],k)=>{
+    const wp=ez((u-.3-k*.07)/.3),y=top+10+k*((rows*rh-20)/5);
+    c.fillStyle=k===0?H2:INK;
+    c.fillText(w2.trim(),bx,y+10);
+    c.fillStyle='rgba(201,210,219,.5)';
+    c.fillRect(bx+58,y,bw,12);
+    c.fillStyle=heat(.25+.75*p);
+    c.fillRect(bx+58,y,Math.max(2,bw*p*wp),12);
+    c.fillStyle=MUT;
+    c.fillText((p*100).toFixed(0)+'%',bx+62+bw,y+10);
+  });
+  cap(c,W,H,'logit lens = this readout at every depth · settles at L07');
+}
+function sLoop(c,W,H,u){
+  const list=TOK.concat([PRED]),y=H*.32;
+  const n=u>.12?6:5;
+  const pops=list.map((_,i)=>i===5?(u-.12)/.12:2);
+  const {cw,ctrs}=chipRow(c,W,y,list,n,u>.12?5:-1,pops);
+  const x0=ctrs[0]-cw/2,x1=ctrs[5];
+  c.setLineDash([4,4]);c.strokeStyle=INK;
+  c.beginPath();c.moveTo(x1,y+14);
+  c.quadraticCurveTo(W/2,y+110,x0,y+18);c.stroke();c.setLineDash([]);
+  const v=(u*1.2)%1;
+  const[px,py]=qp(x1,y+14,W/2,y+110,x0,y+18,v);
+  c.fillStyle=H2;c.beginPath();c.arc(px,py,3,0,7);c.fill();
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  c.fillText('append · cache K/V · run again',W/2,y+92);
+  const gx=ctrs[5]+cw;
+  if(u>.6&&gx+cw/2<W-4){
+    c.globalAlpha=.35+.25*Math.sin(u*12);
+    c.setLineDash([3,3]);c.strokeStyle=MUT;
+    rrect(c,gx-cw/2+3,y-10,cw-6,20,5);c.stroke();c.setLineDash([]);
+    c.fillStyle=MUT;c.fillText('?',gx,y+4);
+    c.globalAlpha=1;
+  }
+  c.textAlign='left';
+  cap(c,W,H,'autoregression: one forward pass per generated token');
+}
+
+const SC=[sTok,sEmb,sMix,sMlp,sStack,sRead,sLoop];
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let step=0,st=0,last=0,play=!REDUCED,looping=false;
+function draw(){
+  const[c,W,H]=fit(cv);
+  c.clearRect(0,0,W,H);
+  const C=STEPS[step].c,u=(st%C)/C;
+  SC[step](c,W,H,u);
+  if(play){c.fillStyle=INK;c.fillRect(0,H-2,W*u,2);}
+}
+function tick(ts){
+  const dt=Math.min(600,ts-(last||ts));last=ts;
+  st+=dt/1000;
+  if(play&&st>=STEPS[step].c){setStep((step+1)%SC.length);return;}
+  draw();
+}
+function loop(ts){if(looping)requestAnimationFrame(loop);tick(ts);}
+function ensureLoop(){
+  if(looping)return;
+  looping=true;
+  requestAnimationFrame(loop);
+  setInterval(()=>{const n=performance.now();if(n-last>350)tick(n);},350);
+}
+const pills=[];
+function setStep(i){
+  step=i;st=REDUCED&&!play?STEPS[i].c*.65:0;
+  pills.forEach((p,k)=>p.classList.toggle('on',k===i));
+  document.getElementById('ititle').textContent=STEPS[i].t();
+  document.getElementById('itext').textContent=STEPS[i].d();
+  document.getElementById('ilive').textContent=STEPS[i].l();
+  draw();
+}
+const pb=document.getElementById('iplay');
+const syncPlay=()=>{pb.textContent=play?'⏸':'▸';};
+pb.onclick=()=>{play=!play;syncPlay();if(play)ensureLoop();};
+document.getElementById('iprev').onclick=()=>{
+  play=false;syncPlay();setStep((step+SC.length-1)%SC.length);};
+document.getElementById('inext').onclick=()=>{
+  play=false;syncPlay();setStep((step+1)%SC.length);};
+const pillbox=document.getElementById('ipills');
+STEPS.forEach((s,i)=>{
+  const b=document.createElement('button');
+  b.className='ipill';b.textContent=(i+1)+' '+s.p;
+  b.onclick=()=>{play=false;syncPlay();setStep(i);};
+  pillbox.appendChild(b);pills.push(b);
+});
+document.querySelectorAll('#insidecard .chip').forEach(ch=>ch.onclick=()=>{
+  VAR[ch.dataset.g]=ch.dataset.v;
+  document.querySelectorAll(`#insidecard .chip[data-g="${ch.dataset.g}"]`)
+    .forEach(o=>o.classList.toggle('on',o===ch));
+  setStep(step);                            // refresh scene + text for variant
+});
+syncPlay();setStep(0);
+if(!REDUCED)ensureLoop();
+window.addEventListener('resize',draw);
 })();
 
 // copy buttons
