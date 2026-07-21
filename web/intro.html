@@ -483,15 +483,14 @@ function scAttn(c,W,H,u){
 }
 // 02 · gpt loop: distribution → sample → append → run again
 function scLoop(c,W,H,u){
-  const list=TOK.concat([PRED]),y=H*.3;
+  const list=TOK.concat([PRED]);
   const n=u>.42?6:5;
-  const {cw,ctrs}=chipRow(c,W,y,list,n,u>.42?5:-1);
   const P3=[[' Paris',.72],[' Lyon',.06],[' London',.05]];
-  const bx=W-Math.min(200,W*.32),bw=Math.min(110,W*.18);
-  c.font=F(9);c.fillStyle=MUT;
-  c.fillText('p(next)',bx,26);
+  const bx=12,bw=Math.min(110,W*.22);       // distribution panel top-left,
+  c.font=F(9);c.fillStyle=MUT;              // chips below — never overlaps
+  c.fillText('p(next)',bx,22);
   P3.forEach(([w2,p],k)=>{
-    const wp=ez((u-.05-k*.06)/.2),yb=34+k*16;
+    const wp=ez((u-.05-k*.06)/.2),yb=30+k*16;
     c.fillStyle=k===0&&u>.38?H2:INK;
     c.fillText(w2.trim(),bx,yb+9);
     c.fillStyle='rgba(201,210,219,.5)';
@@ -499,17 +498,19 @@ function scLoop(c,W,H,u){
     c.fillStyle=heat(.25+.75*p);
     c.fillRect(bx+52,yb,Math.max(2,bw*p*wp),10);
   });
+  const y=Math.max(H*.42,96);
+  const {cw,ctrs}=chipRow(c,W,y,list,n,u>.42?5:-1);
   c.setLineDash([4,4]);c.strokeStyle=INK;
   c.beginPath();c.moveTo(ctrs[5],y+14);
-  c.quadraticCurveTo(W/2,y+104,ctrs[0]-cw/2,y+18);c.stroke();
+  c.quadraticCurveTo(W/2,y+92,ctrs[0]-cw/2,y+18);c.stroke();
   c.setLineDash([]);
   if(u>.45){
     const v=((u-.45)*1.6)%1;
-    const[px,py]=qp(ctrs[5],y+14,W/2,y+104,ctrs[0]-cw/2,y+18,v);
+    const[px,py]=qp(ctrs[5],y+14,W/2,y+92,ctrs[0]-cw/2,y+18,v);
     c.fillStyle=H2;c.beginPath();c.arc(px,py,3,0,7);c.fill();
   }
   c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
-  c.fillText('append · cache K/V · run again',W/2,y+88);
+  c.fillText('append · cache K/V · run again',W/2,y+78);
   c.textAlign='left';
   cap(c,W,H,'autoregression: one forward pass per generated token');
 }
