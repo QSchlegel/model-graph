@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>an intro to transformers, along the papers · model-graph</title>
+<meta name="description" content="An animated introduction to transformer LLMs, told along the papers: attention (2017), GPT-2, the logit lens, key-value memories, the residual stream, induction heads, attention sinks, mixture-of-experts and hybrid SSMs — in the same visual language model-graph uses on live models.">
+<link rel="canonical" href="https://model-graph.com/intro">
+<meta property="og:type" content="article">
+<meta property="og:title" content="An intro to transformers, along the papers">
+<meta property="og:description" content="Nine ideas, nine papers, one visual language — animated, and inspectable live on a real model.">
+<meta property="og:url" content="https://model-graph.com/intro">
+<meta property="og:site_name" content="model-graph">
+<meta name="twitter:card" content="summary">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"TechArticle",
+ "headline":"An intro to transformers, along the papers",
+ "description":"Animated introduction to transformer internals structured around seminal papers, from Attention Is All You Need to hybrid SSMs.",
+ "url":"https://model-graph.com/intro",
+ "author":{"@type":"Person","name":"Quirin Schlegel","url":"https://quirinschlegel.com"},
+ "isPartOf":{"@type":"WebSite","name":"model-graph","url":"https://model-graph.com"}}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%2322344A'/><rect x='3' y='3' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='12.5' y='3' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='22' y='3' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='3' y='12.5' width='7' height='7' rx='1.5' fill='%23C86A35'/><rect x='12.5' y='12.5' width='7' height='7' rx='1.5' fill='%23E39B2D'/><rect x='22' y='12.5' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='3' y='22' width='7' height='7' rx='1.5' fill='%23B02E3C'/><rect x='12.5' y='22' width='7' height='7' rx='1.5' fill='%23D8AA4E'/><rect x='22' y='22' width='7' height='7' rx='1.5' fill='%23E39B2D'/><circle cx='25.5' cy='16' r='3' fill='none' stroke='%23FFFFFF' stroke-width='1.6'/></svg>">
+<style>
+  :root{
+    --paper:#EEF1F4; --panel:#FFFFFF; --ink:#22344A; --muted:#6B7A8C;
+    --line:#C9D2DB; --heat0:#D8DEE6; --heat1:#E39B2D; --heat2:#B02E3C;
+    --ctxc:#3E7CA8;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  html,body{max-width:100%;overflow-x:hidden}
+  body{background:var(--paper);color:var(--ink);font:14px/1.6 var(--mono);
+       -webkit-tap-highlight-color:transparent}
+  a{color:var(--ink)}
+  #aurora{position:fixed;inset:-22%;z-index:0;pointer-events:none;
+          filter:blur(72px) saturate(1.15)}
+  #aurora i{position:absolute;border-radius:16%;--o:.5;opacity:var(--o);
+          animation:drift 26s ease-in-out infinite alternate,
+                    pulse 9s ease-in-out infinite}
+  #aurora i:nth-child(1){left:6%;top:10%;width:34vw;height:30vw;
+          background:var(--heat1)}
+  #aurora i:nth-child(2){left:56%;top:4%;width:30vw;height:26vw;
+          background:var(--heat2);--o:.38;animation-delay:-6s,-3s}
+  #aurora i:nth-child(3){left:68%;top:48%;width:28vw;height:30vw;
+          background:var(--ctxc);--o:.4;animation-delay:-12s,-5s}
+  #aurora i:nth-child(4){left:14%;top:58%;width:26vw;height:26vw;
+          background:var(--heat1);--o:.42;animation-delay:-18s,-7s}
+  #aurora i:nth-child(5){left:40%;top:32%;width:22vw;height:22vw;
+          background:var(--heat2);--o:.26;animation-delay:-9s,-2s}
+  #aurora i:nth-child(6){left:-4%;top:34%;width:24vw;height:22vw;
+          background:var(--ink);--o:.18;animation-delay:-21s,-4s}
+  @keyframes drift{from{transform:translate(0,0) rotate(0) scale(1)}
+          to{transform:translate(6vw,4vh) rotate(16deg) scale(1.18)}}
+  @keyframes pulse{0%,100%{opacity:var(--o)}
+          50%{opacity:calc(var(--o)*.55)}}
+  @media (prefers-reduced-motion:reduce){#aurora i{animation:none}}
+  header,main,footer{position:relative;z-index:1}
+  header{display:flex;gap:14px;align-items:center;padding:10px 18px;
+         border-bottom:1px solid rgba(255,255,255,.6);
+         background:rgba(255,255,255,.55);
+         position:sticky;top:0;z-index:5;
+         box-shadow:0 4px 24px rgba(34,52,74,.06);
+         -webkit-backdrop-filter:blur(16px) saturate(1.3);
+         backdrop-filter:blur(16px) saturate(1.3)}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;
+         font-size:15px;text-decoration:none;white-space:nowrap;flex:none}
+  .brand svg{width:22px;height:22px;display:block;
+         filter:drop-shadow(0 2px 6px rgba(34,52,74,.25))}
+  header nav{margin-left:auto;display:flex;gap:2px;font-size:13px;
+         overflow-x:auto;white-space:nowrap;
+         -webkit-mask-image:linear-gradient(90deg,#000 92%,transparent);
+         mask-image:linear-gradient(90deg,#000 92%,transparent)}
+  header nav a{text-decoration:none;padding:6px 10px;border-radius:7px}
+  header nav a:hover{background:rgba(255,255,255,.75)}
+  header nav a.hot{background:var(--ink);color:var(--panel)}
+  header nav a.hot:hover{background:var(--heat2)}
+  main{max-width:860px;margin:0 auto;padding:40px 20px 60px}
+  .lede{padding:24px 26px;border-radius:16px;margin-bottom:34px;
+        background:rgba(255,255,255,.5);
+        border:1px solid rgba(255,255,255,.65);
+        box-shadow:0 12px 40px rgba(34,52,74,.12);
+        -webkit-backdrop-filter:blur(14px) saturate(1.3);
+        backdrop-filter:blur(14px) saturate(1.3)}
+  .lede h1{font-size:clamp(24px,5vw,30px);line-height:1.25;margin-bottom:10px}
+  .lede p{color:var(--ink)}
+  .paper{background:rgba(255,255,255,.52);border-radius:14px;
+        border:1px solid rgba(255,255,255,.65);padding:18px 20px;
+        margin-bottom:26px;
+        box-shadow:0 8px 28px rgba(34,52,74,.10);
+        -webkit-backdrop-filter:blur(14px) saturate(1.3);
+        backdrop-filter:blur(14px) saturate(1.3)}
+  .era{display:inline-block;font-size:10.5px;font-weight:600;
+        letter-spacing:.08em;text-transform:uppercase;color:var(--muted);
+        border:1px solid var(--line);border-radius:12px;padding:2px 10px;
+        margin-bottom:8px}
+  .paper h2{font-size:16px;margin-bottom:2px}
+  .src{font-size:11.5px;color:var(--muted);margin-bottom:10px}
+  .src a{color:var(--muted)}
+  .paper canvas{width:100%;height:250px;display:block;margin:6px 0 12px;
+        border:1px solid rgba(255,255,255,.7);border-radius:8px;
+        background:rgba(238,241,244,.72)}
+  .paper p{font-size:13px;margin:8px 0}
+  .live{font-size:12px;color:var(--muted);border-left:2px solid var(--heat1);
+        padding-left:10px;margin-top:10px}
+  .cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .btn{font:14px var(--mono);padding:10px 16px;border:1.5px solid var(--ink);
+       border-radius:6px;background:rgba(255,255,255,.6);text-decoration:none;
+       cursor:pointer}
+  .btn.primary{background:var(--ink);color:var(--panel)}
+  .btn:hover{background:var(--heat1);color:var(--ink);border-color:var(--ink)}
+  footer{border-top:1px solid rgba(255,255,255,.6);padding:26px 20px;
+         text-align:center;color:var(--muted);font-size:12.5px;
+         background:rgba(255,255,255,.45);
+         -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+  footer a{margin:0 8px}
+  @media (max-width:640px){
+    header{padding:8px 10px;gap:8px}
+    header nav{font-size:12px}
+    header nav a{padding:6px 7px}
+    main{padding:28px 12px 40px}
+    .lede{padding:18px 16px}
+    .paper{padding:14px 14px}
+    .paper canvas{height:210px}
+    .cta .btn{flex:1;text-align:center}
+    footer a{display:inline-block;padding:6px 4px}
+  }
+  .lgo rect:not(:first-of-type){animation:lgoPulse 2.6s ease-in-out infinite}
+  .lgo rect:nth-of-type(2){animation-delay:0s}
+  .lgo rect:nth-of-type(3){animation-delay:.3s}
+  .lgo rect:nth-of-type(4){animation-delay:.6s}
+  .lgo rect:nth-of-type(5){animation-delay:.9s}
+  .lgo rect:nth-of-type(6){animation-delay:1.2s}
+  .lgo rect:nth-of-type(7){animation-delay:1.5s}
+  .lgo rect:nth-of-type(8){animation-delay:1.8s}
+  .lgo rect:nth-of-type(9){animation-delay:2.1s}
+  .lgo rect:nth-of-type(10){animation-delay:2.4s}
+  @keyframes lgoPulse{0%,100%{opacity:1}50%{opacity:.35}}
+  .lgo circle{animation:lgoRing 2.6s ease-in-out infinite}
+  @keyframes lgoRing{0%,100%{opacity:1}50%{opacity:.5}}
+  @media (prefers-reduced-motion:reduce){.lgo rect,.lgo circle{animation:none}}
+</style>
+</head>
+<body>
+<div id="aurora" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+<header>
+  <a class="brand" href="/">
+    <svg class="lgo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#22344A"/><rect x="3" y="3" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="12.5" y="3" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="22" y="3" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="3" y="12.5" width="7" height="7" rx="1.5" fill="#C86A35"/><rect x="12.5" y="12.5" width="7" height="7" rx="1.5" fill="#E39B2D"/><rect x="22" y="12.5" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="3" y="22" width="7" height="7" rx="1.5" fill="#B02E3C"/><rect x="12.5" y="22" width="7" height="7" rx="1.5" fill="#D8AA4E"/><rect x="22" y="22" width="7" height="7" rx="1.5" fill="#E39B2D"/><circle cx="25.5" cy="16" r="3" fill="none" stroke="#FFFFFF" stroke-width="1.6"/></svg>
+    model-graph
+  </a>
+  <nav>
+    <a href="/chat">chat</a>
+    <a href="/dashboard">dashboard</a>
+    <a class="hot" href="/intro">intro</a>
+    <a href="/#ryo">run</a>
+    <a href="/six-pager">six-pager</a>
+    <a href="/blog/">blog</a>
+    <a href="https://github.com/QSchlegel/model-graph">github</a>
+  </nav>
+</header>
+
+<main>
+<div class="lede">
+  <h1>An intro to transformers, along the papers</h1>
+  <p>Nine ideas, nine papers, one visual language. Everything below animates
+     in the same rendering the live inspector uses on real models — mock
+     data on this page, forward hooks in the app. Read top to bottom, then
+     open the <a href="/chat">chat</a> and watch every one of these ideas
+     happen on a real model, live.</p>
+</div>
+
+<div class="paper">
+  <span class="era">01 · 2017</span>
+  <h2>Attention Is All You Need</h2>
+  <div class="src">Vaswani et al. ·
+    <a href="https://arxiv.org/abs/1706.03762">arXiv:1706.03762</a></div>
+  <canvas id="sc-attn"></canvas>
+  <p>Before 2017, sequence models were recurrent: information crawled
+     position by position through a bottleneck state. This paper removed
+     recurrence entirely. Every position emits a <b>query</b>, a <b>key</b>
+     and a <b>value</b>; a position's query is scored against every key
+     (q·k/√d), softmax turns the scores into weights, and the values blend
+     in proportion. Any position can reach any other in one step, and the
+     whole thing is parallel across the sequence during training.</p>
+  <p>Run several of these side by side with different learned projections
+     and you get <b>multi-head</b> attention — each head free to
+     specialize in its own relation: syntax, coreference, position,
+     copying.</p>
+  <p class="live">live: click any token in the
+     <a href="/chat">chat</a> — its real attention arcs; in viz&nbsp;·&nbsp;attn,
+     cells subdivide into per-head fingerprints.</p>
+</div>
+
+<div class="paper">
+  <span class="era">02 · 2019</span>
+  <h2>GPT-2 — language modeling is enough</h2>
+  <div class="src">Radford et al. ·
+    <a href="https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf">
+    Language Models are Unsupervised Multitask Learners</a></div>
+  <canvas id="sc-loop"></canvas>
+  <p>Decoder-only transformers trained on a single objective — predict the
+     next token — turned out to pick up translation, summarization and QA
+     as side effects of getting good at prediction. The engine is
+     <b>autoregression</b>: score the whole vocabulary, sample one token,
+     append it, run again. Earlier keys/values are cached, so each new
+     token costs one forward pass.</p>
+  <p>Every capability question since — reasoning, tool use, agents — is
+     ultimately a question about what this loop learned to represent.</p>
+  <p class="live">live: send a message in the <a href="/chat">chat</a>;
+     the top-5 distribution and the sampled token stream in per step.</p>
+</div>
+
+<div class="paper">
+  <span class="era">03 · 2020</span>
+  <h2>The logit lens</h2>
+  <div class="src">nostalgebraist ·
+    <a href="https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens">
+    interpreting GPT: the logit lens</a></div>
+  <canvas id="sc-lens"></canvas>
+  <p>A blog post, not a paper — still one of interpretability's most used
+     tools. Because layers only <i>add</i> to the residual stream (§05),
+     you can take the stream at any depth and push it through the final
+     norm and unembedding, as if the model stopped there. The next-token
+     prediction usually forms gradually: noise early, plausible guesses
+     mid-depth, settled late.</p>
+  <p>Where it settles is a per-token difficulty signal: easy continuations
+     settle early, hard ones keep flipping until the last layers — and
+     some wrong answers never settle at all.</p>
+  <p class="live">live: the dots on the <a href="/chat">chat heatmap</a>
+     are real lens flips — red where the prediction settles on the token
+     actually emitted.</p>
+</div>
+
+<div class="paper">
+  <span class="era">04 · 2021</span>
+  <h2>Feed-forward layers are key–value memories</h2>
+  <div class="src">Geva et al. ·
+    <a href="https://arxiv.org/abs/2012.14913">arXiv:2012.14913</a></div>
+  <canvas id="sc-mlp"></canvas>
+  <p>Roughly two-thirds of a transformer's parameters sit in the MLP
+     blocks, and this paper explained what they do: the expand projection
+     acts as thousands of <b>keys</b> that match patterns in the residual
+     stream; the contract projection holds <b>values</b> written back when
+     a key fires. Factual recall largely lives here.</p>
+  <p>The division of labour: attention decides <i>where to look</i>, MLPs
+     supply <i>what is known</i>. A wrong fact emitted with a big mid-depth
+     MLP write is a wrong memory — a different failure from a wrong plan,
+     and it needs a different fix.</p>
+  <p class="live">live: viz&nbsp;·&nbsp;mlp in the <a href="/chat">chat</a>
+     is exactly this block's write strength, per layer × token.</p>
+</div>
+
+<div class="paper">
+  <span class="era">05 · 2021</span>
+  <h2>The residual stream view</h2>
+  <div class="src">Elhage et al. ·
+    <a href="https://transformer-circuits.pub/2021/framework/index.html">
+    A Mathematical Framework for Transformer Circuits</a></div>
+  <canvas id="sc-stack"></canvas>
+  <p>Anthropic's framework paper recast the architecture: don't read a
+     transformer as a pipeline of layers — read it as one shared
+     <b>residual stream</b> that every attention head and every MLP reads
+     from and writes into. x ← x + block(x), dozens of times. Blocks
+     communicate by leaving vectors in the stream for later blocks to
+     find.</p>
+  <p>Because the structure is additive, interpretability becomes
+     accounting: measure who wrote what, where, and how much. That
+     accounting is precisely what model-graph streams.</p>
+  <p class="live">live: every heatmap row in the
+     <a href="/dashboard">dashboard</a> is one of these blocks; hot cells
+     are big writes into the stream.</p>
+</div>
+
+<div class="paper">
+  <span class="era">06 · 2022</span>
+  <h2>Induction heads &amp; in-context learning</h2>
+  <div class="src">Olsson et al. ·
+    <a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html">
+    In-context Learning and Induction Heads</a></div>
+  <canvas id="sc-induct"></canvas>
+  <p>Why can a frozen model learn from its prompt? A two-head circuit: one
+     head tags every token with what preceded it; the second — the
+     <b>induction head</b> — finds the previous occurrence of the current
+     token and copies whatever came <i>next</i>. "…The cat sat … The cat"
+     → " sat".</p>
+  <p>These heads appear in a sharp phase change during training, at the
+     same moment in-context learning ability jumps — one of the cleanest
+     mechanism-to-capability links found so far.</p>
+  <p class="live">live: repeat a phrase in the <a href="/chat">chat</a> and
+     watch vertical stripes recur in the attn heatmap — induction-style
+     copying, visible.</p>
+</div>
+
+<div class="paper">
+  <span class="era">07 · 2023</span>
+  <h2>Attention sinks</h2>
+  <div class="src">Xiao et al. ·
+    <a href="https://arxiv.org/abs/2309.17453">arXiv:2309.17453</a></div>
+  <canvas id="sc-sink"></canvas>
+  <p>Softmax must sum to 1 — even when a head has nothing useful to say.
+     The spare probability parks on the first tokens: the <b>attention
+     sink</b>. Keep those first tokens plus a sliding window and models
+     stream indefinitely (StreamingLLM); drop them and quality collapses.</p>
+  <p>Sinks matter for debugging too. In one of our recorded runs, a failed
+     arithmetic answer spent 40% of its attention on the sink token
+     instead of the numbers — the model wasn't looking at the problem at
+     all.</p>
+  <p class="live">live: select a token in the <a href="/chat">chat</a> —
+     the "◂ context" share often IS the sink; heads that fire on every
+     token are usually parked there.</p>
+</div>
+
+<div class="paper">
+  <span class="era">08 · 2017 / 2021</span>
+  <h2>Mixture of experts — scale width, not compute</h2>
+  <div class="src">Shazeer et al. ·
+    <a href="https://arxiv.org/abs/1701.06538">arXiv:1701.06538</a> ·
+    Fedus et al. · <a href="https://arxiv.org/abs/2101.03961">arXiv:2101.03961</a></div>
+  <canvas id="sc-moe"></canvas>
+  <p>Replace one big MLP with N small experts and a <b>router</b> that
+     sends each token to its top-k: parameter count scales with N, compute
+     only with k. Most frontier models now run on this trade.</p>
+  <p>The router's choices are structure you can watch — experts specialize
+     by token type, and utilization per expert across a run tells you
+     whether the routing collapsed or spread.</p>
+  <p class="live">live: on MoE models the <a href="/chat">chat</a> cut-out
+     panel streams real router weights and per-run expert utilization.</p>
+</div>
+
+<div class="paper">
+  <span class="era">09 · 2023–25</span>
+  <h2>Beyond attention — SSMs and hybrids</h2>
+  <div class="src">Gu &amp; Dao ·
+    <a href="https://arxiv.org/abs/2312.00752">arXiv:2312.00752</a> ·
+    Liquid AI · <a href="https://www.liquid.ai/">LFM2</a></div>
+  <canvas id="sc-conv"></canvas>
+  <p>Attention's n² cost and ever-growing KV cache motivated a return to
+     recurrence — done right this time. Selective state spaces (Mamba) and
+     gated short convolutions carry a fixed-size state: long context stops
+     being expensive. Hybrids keep a few real attention layers for global
+     recall and use cheap local mixers everywhere else.</p>
+  <p>model-graph's default model, LFM2.5-1.2B, is exactly such a hybrid —
+     the C rows and A rows in every heatmap are this design decision made
+     visible, layer by layer.</p>
+  <p class="live">live: compare C-row and A-row writes in the
+     <a href="/chat">chat</a> — local mixing vs global retrieval, per
+     token.</p>
+</div>
+
+<div class="lede">
+  <h1 style="font-size:20px">Papers are the map. The running model is the
+    territory.</h1>
+  <p>Every animation above is mock data in a real renderer. The app runs
+     the same visual language on live forward passes — norms, heads,
+     router flow, lens, arcs, trajectories — for any HF causal LM.</p>
+  <div class="cta">
+    <a class="btn primary" href="/chat">Open the chat →</a>
+    <a class="btn" href="/dashboard">Dashboard</a>
+    <a class="btn" href="/#inside">Step-by-step walkthrough</a>
+  </div>
+</div>
+</main>
+
+<footer>
+  model-graph · MIT ·
+  <a href="/chat">chat</a><a href="/dashboard">dashboard</a>
+  <a href="/blog/">blog</a><a href="/vault/README.md">vault</a>
+  <a href="/CONTRIBUTING.md">contributing</a>
+  <a href="https://github.com/QSchlegel/model-graph">GitHub</a>
+  <a href="https://quirinschlegel.com">quirinschlegel.com</a>
+</footer>
+
+<script>
+'use strict';
+const INK='#22344A',MUT='#6B7A8C',LINE='#C9D2DB',H1='#E39B2D',H2='#B02E3C',
+      CTX='#3E7CA8',PAPER='#EEF1F4';
+function mixc(a,b,w){
+  const p=h=>[parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),
+              parseInt(h.slice(5,7),16)];
+  const x=p(a),y=p(b);
+  return `rgb(${x.map((v,i)=>Math.round(v+(y[i]-v)*w)).join(',')})`;
+}
+const heat=w=>w<=0?'#E6EAEE':w<.55?mixc('#EDF0F3',H1,w/.55)
+                              :mixc(H1,H2,(w-.55)/.45);
+function fit(cv){
+  const dpr=window.devicePixelRatio||1,r=cv.getBoundingClientRect();
+  cv.width=r.width*dpr;cv.height=r.height*dpr;
+  const c=cv.getContext('2d');
+  c.setTransform(dpr,0,0,dpr,0,0);
+  return [c,r.width,r.height];
+}
+const rnd=(i,j)=>{const s=Math.sin(i*127.1+j*311.7)*43758.5453;
+                  return s-Math.floor(s);};
+const ez=u=>u<=0?0:u>=1?1:u*u*(3-2*u);
+const F=s=>s+'px ui-monospace,Menlo,monospace';
+const qp=(x0,y0,cx,cy,x1,y1,u)=>{const a=1-u;
+  return [a*a*x0+2*a*u*cx+u*u*x1,a*a*y0+2*a*u*cy+u*u*y1];};
+function rrect(c,x,y,w,h,r){
+  c.beginPath();
+  if(c.roundRect)c.roundRect(x,y,w,h,r);else c.rect(x,y,w,h);
+}
+function chipRow(c,W,y,list,n,hot){
+  const cw=Math.min(94,(W-24)/list.length),
+        x0=(W-cw*list.length)/2,ctrs=[];
+  c.textAlign='center';
+  list.forEach((w,i)=>{
+    ctrs.push(x0+i*cw+cw/2);
+    if(i>=n)return;
+    c.fillStyle=i===hot?'rgba(176,46,60,.12)':'rgba(255,255,255,.9)';
+    c.strokeStyle=i===hot?H2:LINE;
+    rrect(c,ctrs[i]-(cw-6)/2,y-10,cw-6,20,5);c.fill();c.stroke();
+    c.fillStyle=i===hot?H2:INK;c.font=F(10);
+    c.fillText(w.trim().slice(0,8)||'·',ctrs[i],y+3.5);
+  });
+  c.textAlign='left';
+  return {cw,ctrs};
+}
+function vcol(c,cx,yt,i,p,glow){
+  for(let j=0;j<8;j++){
+    c.fillStyle=p*8>j?heat(.15+.8*rnd(i,j)):'rgba(201,210,219,.35)';
+    c.fillRect(cx-6.5,yt+j*11,13,10);
+  }
+  if(glow>0){
+    c.strokeStyle=`rgba(227,155,45,${glow})`;c.lineWidth=2;
+    c.strokeRect(cx-8.5,yt-2,17,8*11+3);c.lineWidth=1;
+  }
+}
+function arrow(c,x0,y0,x1,y1,p,col){
+  if(p<=0)return;
+  const x=x0+(x1-x0)*ez(p),y=y0+(y1-y0)*ez(p);
+  c.strokeStyle=col||MUT;
+  c.beginPath();c.moveTo(x0,y0);c.lineTo(x,y);c.stroke();
+  if(p>=1){
+    const a=Math.atan2(y1-y0,x1-x0);
+    c.beginPath();c.moveTo(x1,y1);
+    c.lineTo(x1-6*Math.cos(a-.45),y1-6*Math.sin(a-.45));
+    c.lineTo(x1-6*Math.cos(a+.45),y1-6*Math.sin(a+.45));
+    c.closePath();c.fillStyle=col||MUT;c.fill();
+  }
+}
+function cap(c,W,H,left){
+  c.fillStyle=MUT;
+  let f=10;c.font=F(f);
+  while(f>8&&c.measureText(left).width>W-24){f--;c.font=F(f);}
+  if(c.measureText(left).width>W-24){
+    while(left.length>8&&c.measureText(left+'…').width>W-24)
+      left=left.slice(0,-1);
+    left+='…';
+  }
+  c.fillText(left,12,H-11);
+}
+const TOK=['The',' capital',' of',' France',' is'],PRED=' Paris';
+
+// 01 · attention: q·k scores → softmax weights → value flow
+function scAttn(c,W,H,u){
+  const y=70,{ctrs}=chipRow(c,W,y,TOK,5,4);
+  TOK.forEach((_,i)=>vcol(c,ctrs[i],y+22,i,1,i===4?ez((u-.6)/.3)*.9:0));
+  const qx=ctrs[4],qy=y-12;
+  const WGT=[[3,.55,4.2],[1,.22,3.3],[0,.09,2.4],[2,.05,1.9]];
+  c.font=F(9);c.textAlign='center';
+  const soft=ez((u-.28)/.14);               // scores → softmax weights
+  WGT.forEach(([s,w,sc],j)=>{
+    const a=ez((u-.04-j*.06)/.1);
+    if(a<=0)return;
+    const sx=ctrs[s],cy2=Math.max(10,y-52-70*w);
+    if(u>.42){
+      c.strokeStyle=`rgba(176,46,60,${(.2+.65*w)*a})`;
+      c.lineWidth=1+3*w;
+      c.beginPath();c.moveTo(qx,qy);
+      c.quadraticCurveTo((qx+sx)/2,cy2,sx,qy);c.stroke();
+      const v=(u*1.4+j*.27)%1;
+      const[px,py]=qp(sx,qy,(qx+sx)/2,cy2,qx,qy,v);
+      c.fillStyle=H2;c.beginPath();c.arc(px,py,2.2,0,7);c.fill();
+    }
+    const[ax,ay]=qp(qx,qy,(qx+sx)/2,cy2,sx,qy,.5);
+    c.fillStyle=soft<1?`rgba(107,122,140,${a})`:`rgba(176,46,60,${a})`;
+    c.fillText(soft<.5?`q·k ${sc.toFixed(1)}`
+                      :(w*100).toFixed(0)+'%',ax,ay-5);
+  });
+  c.lineWidth=1;c.textAlign='left';
+  cap(c,W,H,u<.42?'scores: q·k/√d for every earlier position'
+    :'softmax → weights · values blend into " is" in proportion');
+}
+// 02 · gpt loop: distribution → sample → append → run again
+function scLoop(c,W,H,u){
+  const list=TOK.concat([PRED]),y=H*.3;
+  const n=u>.42?6:5;
+  const {cw,ctrs}=chipRow(c,W,y,list,n,u>.42?5:-1);
+  const P3=[[' Paris',.72],[' Lyon',.06],[' London',.05]];
+  const bx=W-Math.min(200,W*.32),bw=Math.min(110,W*.18);
+  c.font=F(9);c.fillStyle=MUT;
+  c.fillText('p(next)',bx,26);
+  P3.forEach(([w2,p],k)=>{
+    const wp=ez((u-.05-k*.06)/.2),yb=34+k*16;
+    c.fillStyle=k===0&&u>.38?H2:INK;
+    c.fillText(w2.trim(),bx,yb+9);
+    c.fillStyle='rgba(201,210,219,.5)';
+    c.fillRect(bx+52,yb,bw,10);
+    c.fillStyle=heat(.25+.75*p);
+    c.fillRect(bx+52,yb,Math.max(2,bw*p*wp),10);
+  });
+  c.setLineDash([4,4]);c.strokeStyle=INK;
+  c.beginPath();c.moveTo(ctrs[5],y+14);
+  c.quadraticCurveTo(W/2,y+104,ctrs[0]-cw/2,y+18);c.stroke();
+  c.setLineDash([]);
+  if(u>.45){
+    const v=((u-.45)*1.6)%1;
+    const[px,py]=qp(ctrs[5],y+14,W/2,y+104,ctrs[0]-cw/2,y+18,v);
+    c.fillStyle=H2;c.beginPath();c.arc(px,py,3,0,7);c.fill();
+  }
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  c.fillText('append · cache K/V · run again',W/2,y+88);
+  c.textAlign='left';
+  cap(c,W,H,'autoregression: one forward pass per generated token');
+}
+// 03 · logit lens ladder + final top-5
+function scLens(c,W,H,u){
+  const rows=12,top=24,rh=(H-58-top)/rows;
+  const lens=['the','the','a','a','city','city','Lyon','Paris',
+              'Paris','Paris','Paris','Paris'];
+  const vis=Math.floor(ez(u/.75)*rows);
+  c.font=F(9);
+  for(let i=0;i<vis;i++){
+    const yy=top+i*rh,settled=lens[i]==='Paris',
+          chg=i>0&&lens[i]!==lens[i-1];
+    if(chg){c.fillStyle='rgba(227,155,45,.5)';c.fillRect(12,yy,2,rh-2);}
+    c.fillStyle=MUT;
+    c.fillText('L'+String(i).padStart(2,'0'),18,yy+rh/2+3);
+    c.fillStyle=settled?H2:INK;
+    c.fillText(lens[i],48,yy+rh/2+3);
+  }
+  const P5=[[' Paris',.72],[' Lyon',.06],[' London',.05],
+            [' the',.04],[' France',.02]];
+  const bx=W*.42,bw=W*.5-52;
+  c.fillStyle=MUT;
+  c.fillText('final norm → unembed → softmax',bx,top-6);
+  P5.forEach(([w2,p],k)=>{
+    const wp=ez((u-.3-k*.07)/.3),yy=top+10+k*((rows*rh-20)/5);
+    c.fillStyle=k===0?H2:INK;
+    c.fillText(w2.trim(),bx,yy+10);
+    c.fillStyle='rgba(201,210,219,.5)';
+    c.fillRect(bx+58,yy,bw,12);
+    c.fillStyle=heat(.25+.75*p);
+    c.fillRect(bx+58,yy,Math.max(2,bw*p*wp),12);
+    c.fillStyle=MUT;
+    c.fillText((p*100).toFixed(0)+'%',bx+62+bw,yy+10);
+  });
+  cap(c,W,H,'decode EVERY depth as if the model stopped there · settles at L07');
+}
+// 04 · mlp as key→value memory
+function scMlp(c,W,H,u){
+  const midY=H*.47,inX=W*.14,exX=W*.46,outX=W*.84;
+  vcol(c,inX,midY-44,4,1,0);
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  c.fillText('from stream',inX,midY+58);
+  arrow(c,inX+12,midY,exX-40,midY,u/.15);
+  const gp=ez((u-.15)/.4);
+  for(let cc=0;cc<4;cc++)for(let j=0;j<8;j++){
+    const on=gp*32>cc*8+j;
+    c.fillStyle=on?heat(.15+.8*rnd(9+cc,j)):'rgba(201,210,219,.3)';
+    c.fillRect(exX-32+cc*16,midY-44+j*11,14,10);
+  }
+  c.fillStyle=MUT;
+  c.fillText('keys match patterns',exX,midY-54);
+  arrow(c,exX+36,midY,outX-14,midY,(u-.55)/.15);
+  vcol(c,outX,midY-44,13,ez((u-.6)/.3),ez((u-.85)/.15)*.8);
+  c.fillText('values write facts',outX,midY+58);
+  c.textAlign='left';
+  cap(c,W,H,'expand ×4 · nonlinearity · contract — most parameters live here');
+}
+// 05 · residual stream accumulating writes
+function scStack(c,W,H,u){
+  const rows=12,top=22,rh=(H-58-top)/rows,bx=W*.24;
+  const r=Math.min(rows-1,Math.floor(u*rows));
+  for(let i=0;i<rows;i++){
+    const yy=top+i*rh,act=i===r,done=i<r;
+    c.font=F(9);c.fillStyle=MUT;
+    c.fillText('L'+String(i).padStart(2,'0'),bx-56,yy+rh/2+3);
+    ['attn','mlp'].forEach((lb,b)=>{
+      const x=bx+b*56;
+      c.fillStyle=act?heat(b?.75:.45)
+        :done?'rgba(227,155,45,.25)':'rgba(255,255,255,.75)';
+      c.strokeStyle=act?INK:LINE;
+      c.fillRect(x,yy+1.5,48,rh-4);c.strokeRect(x,yy+1.5,48,rh-4);
+      if(act){c.fillStyle=INK;c.fillText(lb,x+5,yy+rh/2+3);}
+    });
+  }
+  const rbx=W*.72,rbw=26;
+  c.strokeStyle=LINE;c.strokeRect(rbx,top,rbw,rows*rh);
+  for(let i=0;i<=r;i++){
+    c.fillStyle=heat(.2+.75*rnd(i,3));
+    c.fillRect(rbx+1,top+i*rh+1,rbw-2,rh-2);
+  }
+  arrow(c,bx+112,top+r*rh+rh/2,rbx-6,top+r*rh+rh/2,1,H2);
+  c.font=F(9);c.fillStyle=MUT;c.textAlign='center';
+  c.fillText('residual stream',rbx+rbw/2,top+rows*rh+14);
+  c.textAlign='left';
+  cap(c,W,H,'x ← x + block(x) — every block ADDS; nothing is replaced');
+}
+// 06 · induction head: match previous occurrence, copy successor
+function scInduct(c,W,H,u){
+  const list=['The',' cat',' sat',' on',' a',' mat',' ·',' The',' cat'];
+  const y=H*.42,{cw,ctrs}=chipRow(c,W,y,list,9,8);
+  const scan=u<.3?Math.max(1,7-Math.floor((u/.3)*7)):1;
+  c.setLineDash(u<.3?[3,3]:[]);
+  c.strokeStyle=u<.3?MUT:H2;c.lineWidth=u<.3?1:2;
+  rrect(c,ctrs[scan]-(cw-6)/2-2,y-12,cw-2,24,6);c.stroke();
+  c.setLineDash([]);c.lineWidth=1;
+  c.font=F(9);c.textAlign='center';
+  if(u>=.3){
+    c.fillStyle=H2;
+    c.fillText('match',ctrs[1],y-18);
+  }
+  if(u>.38){
+    const a=ez((u-.38)/.15),sx=ctrs[2],qx2=ctrs[8],cy2=y-64;
+    c.strokeStyle=`rgba(176,46,60,${.75*a})`;c.lineWidth=2;
+    c.beginPath();c.moveTo(qx2,y-12);
+    c.quadraticCurveTo((qx2+sx)/2,cy2,sx,y-12);c.stroke();
+    c.lineWidth=1;
+    const v=(u*1.3)%1;
+    const[px,py]=qp(sx,y-12,(qx2+sx)/2,cy2,qx2,y-12,v);
+    c.fillStyle=H2;c.beginPath();c.arc(px,py,2.4,0,7);c.fill();
+    c.fillStyle=`rgba(107,122,140,${a})`;
+    c.fillText('copy what came next',(qx2+sx)/2,cy2+10);
+  }
+  if(u>.62){
+    const a=ez((u-.62)/.15),gx=ctrs[8];
+    c.globalAlpha=a;
+    c.fillStyle='rgba(176,46,60,.1)';c.strokeStyle=H2;
+    rrect(c,gx-34,y+22,68,22,5);c.fill();c.stroke();
+    c.fillStyle=H2;c.fillText('sat 81%',gx,y+36);
+    c.globalAlpha=1;
+  }
+  c.textAlign='left';
+  cap(c,W,H,'find the previous " cat" · attend to its successor · predict it');
+}
+// 07 · attention sink: spare mass parks on token 0
+function scSink(c,W,H,u){
+  const list=['<s>','The',' capital',' of',' France',' is'];
+  const qi=2+Math.floor(u*4)%4;
+  const y=H*.5,{cw,ctrs}=chipRow(c,W,y,list,6,qi);
+  c.strokeStyle=H2;c.lineWidth=2;
+  rrect(c,ctrs[0]-(cw-6)/2-2,y-12,cw-2,24,6);c.stroke();c.lineWidth=1;
+  const qx=ctrs[qi],qy=y-12;
+  const AR=[[0,.44],[qi-1,.2],[Math.max(1,qi-2),.1]];
+  c.font=F(9);c.textAlign='center';
+  AR.forEach(([s,w],j)=>{
+    if(s===qi)return;
+    const sx=ctrs[s],cy2=Math.max(10,y-46-90*w);
+    c.strokeStyle=`rgba(176,46,60,${.2+w})`;
+    c.lineWidth=1+4*w;
+    c.beginPath();c.moveTo(qx,qy);
+    c.quadraticCurveTo((qx+sx)/2,cy2,sx,qy);c.stroke();
+    const v=(u*2+j*.3)%1;
+    const[px,py]=qp(sx,qy,(qx+sx)/2,cy2,qx,qy,v);
+    c.fillStyle=H2;c.beginPath();c.arc(px,py,2,0,7);c.fill();
+    if(s===0){
+      const[ax,ay]=qp(qx,qy,(qx+sx)/2,cy2,sx,qy,.5);
+      c.fillStyle=H2;c.fillText('44%',ax,ay-5);
+    }
+  });
+  c.lineWidth=1;
+  c.fillStyle=MUT;c.fillText('sink',ctrs[0],y-20);
+  c.textAlign='left';
+  cap(c,W,H,'weights must sum to 1 — spare attention parks on the first token');
+}
+// 08 · moe router picks top-2 experts
+function scMoe(c,W,H,u){
+  const midY=H*.47,inX=W*.14,rX=W*.36,eX=W*.56;
+  vcol(c,inX,midY-44,4,1,0);
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  c.fillText('from stream',inX,midY+58);
+  arrow(c,inX+12,midY,rX-32,midY,u/.15);
+  c.fillStyle='rgba(255,255,255,.9)';c.strokeStyle=INK;
+  rrect(c,rX-30,midY-11,60,22,5);c.fill();c.stroke();
+  c.fillStyle=INK;c.fillText('router',rX,midY+3);
+  const CH={2:.61,5:.27};
+  for(let e=0;e<8;e++){
+    const col=e%4,row=e>>2,x=eX+col*(W*.3/4),yy=midY-34+row*36;
+    const w=CH[e],lit=w&&u>.3+e*.02;
+    c.fillStyle=lit?heat(.35+w):'rgba(255,255,255,.6)';
+    c.strokeStyle=lit?INK:LINE;
+    rrect(c,x,yy,W*.3/4-6,24,4);c.fill();c.stroke();
+    c.fillStyle=lit?INK:MUT;
+    c.fillText('E'+e,x+(W*.3/4-6)/2,yy+15);
+    if(lit)c.fillText((w*100).toFixed(0)+'%',x+(W*.3/4-6)/2,yy-5);
+    if(w&&u>.25){
+      c.strokeStyle=`rgba(176,46,60,${.3+w})`;
+      c.beginPath();c.moveTo(rX+30,midY);
+      c.lineTo(x,yy+12);c.stroke();
+    }
+  }
+  c.textAlign='left';
+  cap(c,W,H,'top-2 of 8 experts · capacity ∝ all, compute ∝ chosen');
+}
+// 09 · hybrid: gated short-conv window + interleaved stack
+function scConv(c,W,H,u){
+  const WL=W-64;                            // chips left of the stack strip
+  const y=76,{cw,ctrs}=chipRow(c,WL,y,TOK,5,4);
+  TOK.forEach((_,i)=>vcol(c,ctrs[i],y+22,i,1,i===4?ez((u-.55)/.3)*.9:0));
+  const qx=ctrs[4],qy=y-12;
+  const x0=ctrs[2]-cw/2+2,x1=ctrs[4]+cw/2-2;
+  c.setLineDash([3,3]);c.strokeStyle=INK;
+  rrect(c,x0,y-14,x1-x0,28,7);c.stroke();c.setLineDash([]);
+  c.font=F(9);c.textAlign='center';c.fillStyle=MUT;
+  [['w₂ ·2',2],['w₁ ·3',1],['w₀ ·5',0]].forEach(([lb,k])=>
+    c.fillText(lb,ctrs[4-k],y-22));
+  [[2,.2],[3,.3]].forEach(([s,w],j)=>{
+    const sx=ctrs[s],cy2=y-36;
+    c.strokeStyle=`rgba(176,46,60,${.3+w})`;c.lineWidth=1+2*w;
+    c.beginPath();c.moveTo(sx,qy);
+    c.quadraticCurveTo((sx+qx)/2,cy2,qx,qy);c.stroke();
+    const v=(u*1.4+j*.4)%1;
+    const[px,py]=qp(sx,qy,(sx+qx)/2,cy2,qx,qy,v);
+    c.fillStyle=H2;c.beginPath();c.arc(px,py,2.2,0,7);c.fill();
+  });
+  c.lineWidth=1;
+  const P='CCACCACCACAC'.split(''),sx2=W-28;
+  P.forEach((k,i)=>{
+    const yy=20+i*((H-60)/12);
+    c.fillStyle=k==='C'?'#8B98A7':H2;
+    c.fillText(k,sx2,yy);
+  });
+  c.fillStyle=MUT;
+  c.fillText('stack',sx2,H-28);
+  c.textAlign='left';
+  cap(c,W,H,'fixed local window · gated · O(1) state — A layers do global recall');
+}
+
+// engine: one clock, only visible canvases tick; reduced-motion = stills
+const DEFS=[['sc-attn',5.5,scAttn],['sc-loop',5,scLoop],
+  ['sc-lens',5.5,scLens],['sc-mlp',5.5,scMlp],['sc-stack',5.5,scStack],
+  ['sc-induct',6,scInduct],['sc-sink',4,scSink],['sc-moe',5.5,scMoe],
+  ['sc-conv',5.5,scConv]];
+const REDUCED=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const SC=DEFS.map(([id,cy,dr])=>({cv:document.getElementById(id),
+  cycle:cy,draw:dr,st:REDUCED?cy*.62:0,on:false}));
+function paint(s){
+  const[c,W,H]=fit(s.cv);
+  c.clearRect(0,0,W,H);
+  s.draw(c,W,H,(s.st%s.cycle)/s.cycle);
+}
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  const s=SC.find(x=>x.cv===e.target);
+  if(!s)return;
+  s.on=e.isIntersecting;
+  if(REDUCED&&s.on)paint(s);
+}),{rootMargin:'90px'});
+SC.forEach(s=>io.observe(s.cv));
+let last=0;
+function tick(ts){
+  const dt=Math.min(600,ts-(last||ts));last=ts;
+  SC.forEach(s=>{
+    if(!s.on)return;
+    s.st+=dt/1000;
+    paint(s);
+  });
+}
+if(!REDUCED){
+  (function loop(ts){requestAnimationFrame(loop);if(ts)tick(ts);})();
+  setInterval(()=>{const n=performance.now();if(n-last>350)tick(n);},350);
+}else{
+  window.addEventListener('resize',()=>SC.forEach(s=>{if(s.on)paint(s);}));
+}
+</script>
+</body>
+</html>

@@ -405,8 +405,12 @@ def make_app(backend: Backend, hub: Hub, cur=None):
         return web.FileResponse(os.path.join(WEB, "blog", "index.html"),
                                 headers=NOCACHE)
 
+    async def intro_page(_request):
+        return web.FileResponse(os.path.join(WEB, "intro.html"),
+                                headers=NOCACHE)
+
     CANON = "https://model-graph.com"
-    PAGES = ["/", "/chat", "/dashboard", "/six-pager", "/blog/",
+    PAGES = ["/", "/chat", "/dashboard", "/intro", "/six-pager", "/blog/",
              "/blog/see-your-model-think.html",
              "/blog/logit-lens-live.html",
              "/blog/observable-onnx.html"]
@@ -459,6 +463,7 @@ def make_app(backend: Backend, hub: Hub, cur=None):
     app.router.add_get("/", landing_page)
     app.router.add_get("/chat", chat_page)
     app.router.add_get("/dashboard", dash_page)
+    app.router.add_get("/intro", intro_page)
     app.router.add_get("/six-pager", sixpager_page)
     app.router.add_get("/blog", blog_index)
     app.router.add_get("/blog/", blog_index)

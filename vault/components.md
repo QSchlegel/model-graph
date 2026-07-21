@@ -1,6 +1,6 @@
 ---
 tags: [component, reference]
-updated: 2026-07-20
+updated: 2026-07-21
 ---
 
 # Components
@@ -34,9 +34,11 @@ on :8765.
 `to_hf_messages`, temperature, usage, `finish_reason` incl. `tool_calls`),
 `/v1/models`, CORS everywhere. `Hub` broadcasts every run over ws :8765 and
 **replays the last run** to new clients. Serves the UIs (no-cache),
-`/models/` (observable exports), `/curator/*` REST. Auto-records every run
-via curator (`--no-curate` off switch). `--mock` = full-featured fake
-backend for wiring tests.
+`/models/` (observable exports), `/curator/*` REST, and the static pages:
+`/` (landing incl. the step-by-step walkthrough), `/intro` (transformers
+intro along the papers, `web/intro.html`), `/six-pager`, `/blog/`,
+sitemap/robots. Auto-records every run via curator (`--no-curate` off
+switch). `--mock` = full-featured fake backend for wiring tests.
 
 ## chat-ui
 
