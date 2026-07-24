@@ -409,13 +409,23 @@ def make_app(backend: Backend, hub: Hub, cur=None):
         return web.FileResponse(os.path.join(WEB, "intro.html"),
                                 headers=NOCACHE)
 
+    async def agent_page(_request):        # in-browser agent state machine
+        return web.FileResponse(os.path.join(WEB, "agent.html"),
+                                headers=NOCACHE)
+
+    async def nav_js(_request):            # shared command-menu for every page
+        return web.FileResponse(
+            os.path.join(WEB, "nav.js"),
+            headers={**NOCACHE, "Content-Type": "application/javascript"})
+
     async def og_image(_request):
         return web.FileResponse(
             os.path.join(WEB, "og.png"),
             headers={"Cache-Control": "public, max-age=86400"})
 
     CANON = "https://model-graph.com"
-    PAGES = ["/", "/chat", "/dashboard", "/intro", "/six-pager", "/blog/",
+    PAGES = ["/", "/chat", "/dashboard", "/agent", "/intro", "/six-pager",
+             "/blog/",
              "/blog/see-your-model-think.html",
              "/blog/logit-lens-live.html",
              "/blog/observable-onnx.html"]
@@ -469,6 +479,8 @@ def make_app(backend: Backend, hub: Hub, cur=None):
     app.router.add_get("/chat", chat_page)
     app.router.add_get("/dashboard", dash_page)
     app.router.add_get("/intro", intro_page)
+    app.router.add_get("/agent", agent_page)
+    app.router.add_get("/nav.js", nav_js)
     app.router.add_get("/og.png", og_image)
     app.router.add_get("/six-pager", sixpager_page)
     app.router.add_get("/blog", blog_index)

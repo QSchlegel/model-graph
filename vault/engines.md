@@ -12,7 +12,8 @@ modes the current run's data supports.
 | capability | server api | browser (stock) | browser (observable) |
 |---|---|---|---|
 | chat (SSE streaming) | ✓ | ✓ | ✓ |
-| tool calling (OpenAI `tools`) | ✓ | — | — |
+| tool calling (native OpenAI `tools`) | ✓ | — | — |
+| agent loop (in-browser ReAct harness) | ✓ | ✓ | ✓ |
 | multimodal (image parts) | ✓ (VL models) | — | — |
 | token strip + run boundaries | ✓ | ✓ | ✓ |
 | top-k predictions | ✓ | ✓ (logits tap) | ✓ |
@@ -40,6 +41,14 @@ Engine notes
 > Option in the chat `engine` select + a `loadLocal` branch — then update
 > this matrix and the in-app explainer's engines section (per
 > [AGENTS.md](../AGENTS.md)).
+
+Agent loop
+- The **agent loop** row is a *harness* over any engine, not native tool
+  training: a ReAct text protocol the harness prompts, parses and executes
+  client-side. Native spec-compliant `tool_calls` (the row above) are LFM2
+  server-only. Full design: [agent-harness](agent-harness.md); surfaces are
+  `web/agent.html` (`/agent`, guided + state-machine graph) and the chat's
+  agent-mode toggle (loop + full internals viz).
 
 Model notes (local defaults)
 - Server: `LiquidAI/LFM2.5-1.2B-Instruct` (hybrid conv/attn, tool-use

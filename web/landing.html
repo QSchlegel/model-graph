@@ -224,6 +224,7 @@
   <nav>
     <a class="hot" href="/chat">chat</a>
     <a href="/dashboard">dashboard</a>
+    <a href="/agent">agent</a>
     <a href="/intro">intro</a>
     <a href="/six-pager">six-pager</a>
     <a href="/blog/">blog</a>
@@ -235,16 +236,20 @@
   <canvas id="heromock"></canvas>
   <div class="hero-in">
     <div class="hero-card">
-      <h1>See your model think.</h1>
-      <p>A live inspector for language models: every layer's activity —
-         norms, heads, router flow, logit lens, attention, residual
-         trajectories — streamed into your browser as the model generates.
-         OpenAI-compatible, testable, honest. The animation behind this
-         card is the actual visualization, running on mock data.</p>
+      <h1>See your model think — then run one yourself.</h1>
+      <p>An open teaching tool for language models. <b>Run a tiny model
+         (135M–500M) right in your browser</b> on WebGPU — watch it generate,
+         or drive it through an <b>agent state machine</b> that turns one
+         forward pass into a think → tool → observe loop. Every layer's
+         activity — norms, heads, router flow, logit lens, attention,
+         residual trajectories — streams live as it runs. OpenAI-compatible,
+         testable, honest. The animation behind this card is the real
+         visualization, on mock data.</p>
       <div class="cta">
-        <a class="btn primary" href="/chat">Open the chat →</a>
+        <a class="btn primary" href="/agent">Run a micro model in your browser →</a>
+        <a class="btn" href="/chat">Open the chat</a>
         <a class="btn" href="/dashboard">Dashboard</a>
-        <a class="btn" href="#ryo">Run your own</a>
+        <a class="btn" href="#ryo">Self-host (Python)</a>
       </div>
     </div>
   </div>
@@ -307,6 +312,32 @@
   </div>
 </section>
 
+<section id="agentsec">
+  <h2>Run it as an agent · a state machine for tiny models</h2>
+  <div class="card" style="padding:18px 20px">
+    <p style="font-size:13.5px;margin-bottom:12px">A 135M model can't reliably
+      use tools on its own — a <b>harness</b> makes it. A finite state machine
+      drives the model through an explicit loop, and you watch every decision
+      live in your browser:</p>
+    <div class="ivar" style="justify-content:center;gap:8px;font-size:12px;
+         margin-bottom:14px">
+      <span class="chip on">think</span><span>→</span>
+      <span class="chip on">decide</span><span>→</span>
+      <span class="chip on">call a tool</span><span>→</span>
+      <span class="chip on">observe</span><span>→</span>
+      <span class="chip on">answer</span>
+    </div>
+    <p style="font-size:12.5px;color:var(--muted)">Real tools run in the page
+      (calculator, unit-convert, clock) alongside clearly-labelled sandbox
+      tools. When a tiny model flubs the format, the harness catches it — the
+      failure is shown, not hidden. No GPU? A scripted demo runs the same
+      machine with no download.</p>
+    <div class="cta" style="margin-top:14px">
+      <a class="btn primary" href="/agent">Open the agent lab →</a>
+    </div>
+  </div>
+</section>
+
 <section>
   <h2>Why it fits your stack</h2>
   <div class="cards">
@@ -322,9 +353,10 @@
       uncertainty, attention focus) plus tool-reasoning suites — should-call
       / abstain / arguments / grounded chains.</p></div>
     <div class="card"><h3>Runs in the browser too</h3><p>Curated models on
-      WebGPU via transformers.js — and an observable-ONNX export that
-      graph-surgeries residual streams into declared outputs, so serverless
-      runs still show real per-layer activity.</p></div>
+      WebGPU via transformers.js — no install. <a href="/agent">Run one as an
+      agent →</a> through a state-machine harness, or use the observable-ONNX
+      export that graph-surgeries residual streams into declared outputs, so
+      serverless runs still show real per-layer activity.</p></div>
   </div>
 </section>
 
@@ -1003,5 +1035,6 @@ document.querySelectorAll('.copy').forEach(b=>b.onclick=()=>{
   b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);
 });
 </script>
+<script src="/nav.js" defer></script>
 </body>
 </html>

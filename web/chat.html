@@ -79,6 +79,23 @@
         background:rgba(255,255,255,.86);
         -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
   .hint a{color:var(--ink)}
+  #agentbtn.on{background:var(--ink);color:var(--panel)}
+  #agentbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap;
+       padding:5px 12px;font-size:11px;color:var(--muted);position:relative;
+       z-index:2;border-bottom:1px solid var(--line);
+       background:rgba(255,255,255,.86);
+       -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+  #agentbar[hidden]{display:none}
+  #agentbar .alabel{font-weight:600;color:var(--ink);text-transform:uppercase;
+       letter-spacing:.06em;font-size:10px}
+  #agentbar .arrow{color:var(--line)}
+  .pill{padding:2px 8px;border:1px solid var(--line);border-radius:11px;
+       color:var(--muted)}
+  .pill.on{background:var(--heat1);border-color:var(--heat2);color:var(--ink);
+       font-weight:600}
+  #astat{color:var(--muted);margin-left:auto}
+  .msg.agent{font-size:12px;opacity:.96}
+  .msg.agent.obs{color:var(--muted);font-family:var(--mono)}
   #tip{position:fixed;z-index:3;pointer-events:none;display:none;
        background:var(--panel);border:1px solid var(--ink);border-radius:4px;
        padding:6px 9px;font-size:11px;box-shadow:0 2px 10px rgba(34,52,74,.18);
@@ -197,11 +214,15 @@
   <div class="ctl">
     <label>engine</label>
     <select id="engine">
-      <option value="server">server api</option>
-      <option value="observable/SmolLM2-135M-Instruct">browser · SmolLM2-135M observable</option>
-      <option value="HuggingFaceTB/SmolLM2-135M-Instruct">browser · SmolLM2-135M</option>
-      <option value="HuggingFaceTB/SmolLM2-360M-Instruct">browser · SmolLM2-360M</option>
-      <option value="onnx-community/Qwen2.5-0.5B-Instruct">browser · Qwen2.5-0.5B</option>
+      <optgroup label="server · full internals">
+        <option value="server">hooked python model</option>
+      </optgroup>
+      <optgroup label="browser · WebGPU (transformers.js)">
+        <option value="observable/SmolLM2-135M-Instruct">SmolLM2-135M · observable</option>
+        <option value="HuggingFaceTB/SmolLM2-135M-Instruct">SmolLM2-135M</option>
+        <option value="HuggingFaceTB/SmolLM2-360M-Instruct">SmolLM2-360M</option>
+        <option value="onnx-community/Qwen2.5-0.5B-Instruct">Qwen2.5-0.5B</option>
+      </optgroup>
     </select>
     <span id="adv">
       <label>api</label><input id="base" spellcheck="false">
@@ -209,6 +230,7 @@
       <label>T</label><input id="temp" value="0" inputmode="decimal">
     </span>
     <button id="metric" title="cycle heatmap metric (or click the background)">viz: mlp</button>
+    <button id="agentbtn" title="agent mode: drive a tool-use loop over the model">agent</button>
     <button id="help" title="what am I looking at?">?</button>
     <button id="clear">clear</button>
     <button id="cfg" title="api endpoint · max tokens · temperature">⚙</button>
@@ -218,6 +240,16 @@
     <span id="loadtxt"></span>
   </div>
 </header>
+<div id="agentbar" hidden>
+  <span class="alabel">agent loop</span>
+  <span class="pill" data-s="TASK">task</span><span class="arrow">→</span>
+  <span class="pill" data-s="THINK">think</span><span class="arrow">→</span>
+  <span class="pill" data-s="ROUTE">route</span><span class="arrow">→</span>
+  <span class="pill" data-s="ACT">act</span><span class="arrow">→</span>
+  <span class="pill" data-s="OBSERVE">observe</span><span class="arrow">→</span>
+  <span class="pill" data-s="ANSWER">answer</span>
+  <span id="astat"></span>
+</div>
 <div class="hint">background = live internals of every request · hover to
   inspect · click a cell → dashboard cut-out, arrow keys navigate it ·
   dots = logit-lens prediction flips (red = settles on final token) ·
@@ -396,6 +428,14 @@
      full embedding trajectory + context trace, and predictions are all
      computed client-side from real tensors. mlp/attn write norms,
      per-head norms and the logit lens still need the server engine.</p>
+
+  <h4>agent mode</h4>
+  <p>the <b>agent</b> button drives a tool-use loop over the current engine:
+     the model writes think → decide → call-tool → observe steps and a state
+     machine parses each one, runs a local tool, and feeds the result back —
+     with the internals viz still filling per step. a tiny model that flubs
+     the format is caught, not hidden. the full guided version, with the
+     state-machine graph, lives at <a href="/agent">/agent</a>.</p>
 
   <p class="why">everything streams from forward hooks over
      <code>ws://localhost:8765</code> (v1 protocol) — the same feed the
@@ -1757,9 +1797,231 @@ function bubble(cls,text){
   return el;
 }
 
+// ═══════════════ agent mode — drive a tool-use loop over the model ══════════
+// A ReAct harness: the model writes Thought/Action/Answer, the harness parses,
+// runs a local tool, feeds the Observation back, and loops — bounded by a step
+// cap. Both engines use the same text protocol so the internals viz still fills
+// per step. The full guided version (with the state-machine graph) is /agent.
+let agentMode=false;
+const AGENT={cap:6,tools:['calculator','convert','clock','weather','lookup']};
+const A_LEN={km:1000,m:1,cm:.01,mm:.001,mi:1609.344,yd:.9144,ft:.3048,in:.0254};
+const A_MASS={kg:1000,g:1,mg:.001,lb:453.59237,oz:28.349523};
+const A_SYN={celsius:'c',centigrade:'c',fahrenheit:'f',kelvin:'k',
+  kilometers:'km',kilometres:'km',kilometer:'km',miles:'mi',mile:'mi',
+  meters:'m',metres:'m',meter:'m',feet:'ft',foot:'ft',inches:'in',inch:'in',
+  kilograms:'kg',kilogram:'kg',grams:'g',gram:'g',pounds:'lb',pound:'lb',
+  lbs:'lb',ounces:'oz',ounce:'oz'};
+const aUnit=u=>{u=String(u||'').toLowerCase().trim();return A_SYN[u]||u;};
+function aCalc(e){e=String(e).trim();
+  if(!/^[-+*/%.()\d\seE]+$/.test(e))throw new Error('only arithmetic is allowed');
+  const v=Function('"use strict";return ('+e+')')();
+  if(typeof v!=='number'||!isFinite(v))throw new Error('not a finite number');
+  return String(Math.round(v*1e6)/1e6);}
+function aConv(val,from,to){from=aUnit(from);to=aUnit(to);const v=Number(val);
+  if(!isFinite(v))throw new Error('value must be a number');
+  const tp={c:1,f:1,k:1};
+  if(tp[from]&&tp[to]){const c=from==='c'?v:from==='f'?(v-32)*5/9:v-273.15;
+    const o=to==='c'?c:to==='f'?c*9/5+32:c+273.15;
+    return `${Math.round(o*100)/100} ${to}`;}
+  for(const T of [A_LEN,A_MASS])
+    if(T[from]&&T[to])return `${Math.round(v*T[from]/T[to]*1e4)/1e4} ${to}`;
+  throw new Error(`can't convert ${from}→${to} (share a dimension)`);}
+const A_WX={paris:'18°C, partly cloudy',tokyo:'26°C, humid',
+  london:'14°C, light rain',berlin:'17°C, overcast','new york':'22°C, clear',
+  'san francisco':'16°C, foggy'};
+const A_KB={everest:'Mount Everest is 8,849 m tall.',
+  photosynthesis:'Plants convert light, water and CO₂ into glucose and oxygen.',
+  'speed of light':'≈ 299,792,458 m/s in a vacuum.'};
+const A_TOOLS={
+  calculator:{sig:'calculator(expression)',d:'evaluate arithmetic, e.g. 47*19+100',
+    run:a=>aCalc(a.expression??a._pos)},
+  convert:{sig:'convert(value, from, to)',d:'unit convert (km/mi/m/ft, kg/lb, c/f/k)',
+    run:a=>aConv(a.value??a._pos,a.from,a.to)},
+  clock:{sig:'clock()',d:'current date and time',run:()=>new Date().toString()},
+  weather:{sig:'weather(city)',d:'weather — sandbox data (paris, tokyo, london, berlin…)',
+    run:a=>A_WX[String(a.city??a._pos??'').toLowerCase().trim()]||'no demo data'},
+  lookup:{sig:'lookup(term)',d:'fact lookup — sandbox data (everest, photosynthesis…)',
+    run:a=>A_KB[String(a.term??a._pos??'').toLowerCase().trim()]||'not in the demo KB'},
+};
+// concrete worked example per tool — tiny models parrot `<placeholder>` tokens,
+// so the format is taught with a full filled-in example (see /agent).
+const A_FEWSHOT={
+  calculator:{u:'What is 5 times 6, plus 2?',th:'I will use the calculator.',
+    act:'calculator(expression="5*6+2")',obs:'32',ans:'It is 32.'},
+  convert:{u:'How many miles is 10 kilometers?',th:'I will convert km to miles.',
+    act:'convert(value=10, from=km, to=mi)',obs:'6.2137 mi',
+    ans:'10 km is about 6.21 miles.'},
+  clock:{u:'What time is it?',th:'I will check the clock.',act:'clock()',
+    obs:'Mon Jan 01 2026 09:30:00',ans:'It is 09:30.'},
+  weather:{u:"What's the weather in Paris?",th:'I will look up the weather.',
+    act:'weather(city="Paris")',obs:'18°C, partly cloudy',
+    ans:'Paris is 18°C and partly cloudy.'},
+  lookup:{u:'How tall is Everest?',th:'I will look it up.',
+    act:'lookup(term="everest")',obs:'Mount Everest is 8,849 m tall.',
+    ans:'Everest is 8,849 m tall.'},
+};
+const A_EX=Object.fromEntries(Object.entries(A_FEWSHOT).map(([k,v])=>[k,v.act]));
+function aDegen(s){s=(s||'').trim();if(s.length<48)return false;
+  const p=s.slice(-28,-8);if(p.length>7&&s.split(p).length-1>=3)return true;
+  const w=s.toLowerCase().split(/\s+/);let run=1,mx=1;
+  for(let i=1;i<w.length;i++){if(w[i]===w[i-1]&&w[i].length>1){run++;if(run>mx)mx=run;}else run=1;}
+  return mx>=6;}
+function aLit(v){v=String(v).trim().replace(/,$/,'').trim();
+  if((v[0]==='"'&&v.endsWith('"'))||(v[0]==="'"&&v.endsWith("'")))return v.slice(1,-1);
+  return v;}
+function aArgs(raw){const out={};raw=String(raw).trim();if(!raw)return out;
+  const kv=[...raw.matchAll(
+    /([a-z_]\w*)\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,]+)/gi)];
+  if(kv.length){for(const m of kv)out[m[1].toLowerCase()]=aLit(m[2]);return out;}
+  const parts=raw.split(',').map(aLit);out._pos=parts[0];
+  if(parts.length>=3){out.value=parts[0];out.from=parts[1];out.to=parts[2];}
+  return out;}
+function aParse(text){const cut=text.search(/\n?\s*observation\s*:/i);
+  const t=cut>=0?text.slice(0,cut):text;
+  const act=t.match(/action\s*:\s*([a-z_]\w*)\s*\(([\s\S]*?)\)/i);
+  const ans=t.match(/(?:final\s*answer|answer)\s*:\s*([\s\S]+)/i);
+  const ia=act?act.index:Infinity,ib=ans?ans.index:Infinity;
+  const th=(t.match(
+    /thought\s*:\s*([\s\S]*?)(?=\n\s*(?:action|answer|final answer)\s*:|$)/i)||[])[1];
+  const thc=(th||'').replace(/\s+/g,' ').trim();
+  if(act&&ia<=ib)return{kind:'act',name:act[1].toLowerCase(),
+    argsRaw:act[2].trim(),thought:thc,raw:t.trim()};
+  if(ans)return{kind:'answer',answer:ans[1].trim(),thought:thc,raw:t.trim()};
+  return{kind:'none',thought:thc,raw:t.trim()};}
+function aSys(){const list=AGENT.tools.map(k=>
+    `- ${A_TOOLS[k].sig}: ${A_TOOLS[k].d}`).join('\n');
+  const ex=A_FEWSHOT[AGENT.tools[0]]||A_FEWSHOT.calculator;
+  return `You are a helpful assistant that can call tools to solve the user's `+
+    `task. Prefer a tool whenever one fits — do not do arithmetic or recall a `+
+    `fact yourself if a tool can, and base your answer on the tool's result. `+
+    `But if no available tool can answer, say so briefly or answer from your `+
+    `own knowledge; never call an unrelated tool just to call something.\n\n`+
+    `Work one step at a time. Write a short Thought, then EITHER one Action OR `+
+    `one Answer. After an Action you are shown an "Observation" with the `+
+    `result.\n\nTools:\n${list}\n\n`+
+    `Example:\nUser: ${ex.u}\nThought: ${ex.th}\nAction: ${ex.act}\n`+
+    `Observation: ${ex.obs}\nThought: The tool returned ${ex.obs}.\n`+
+    `Answer: ${ex.ans}\n\n`+
+    `Now solve the user's task the same way, using only the tools above.`;}
+function setPill(s){document.querySelectorAll('#agentbar .pill').forEach(p=>
+  p.classList.toggle('on',p.dataset.s===s));}
+function astat(t){$('astat').textContent=t;}
+// one generation step → returns the model's text; streams into `el`, feeds viz
+async function agentGen(amsgs,el){
+  if(engine!=='server'){
+    if(!localGen||localGenId!==engine)
+      throw new Error('browser model still loading — pick/await an engine or use server api');
+    const topo=await localTopology(engine);if(topo)onProto(topo);
+    localFrameT=0;lastTopk=null;
+    const obs=localGen.observable;if(obs){obs.pending=null;obs.ctx=null;}
+    const lp=obs?null:mkTopkList();let text='';
+    const streamer=new localT.TextStreamer(localGen.tokenizer,{
+      skip_prompt:true,skip_special_tokens:true,
+      callback_function:txt=>{text+=txt;el.textContent=text;
+        log.scrollTop=log.scrollHeight;
+        if(topo){if(obs?.ctx){onProto(obs.ctx);obs.ctx=null;}
+          const cap=obs?.pending;if(obs)obs.pending=null;
+          onProto({type:'token',t:localFrameT++,text:txt,
+            ...(cap?{layers:cap.layers,proj:cap.proj,topk:cap.topk}
+                   :{...(lastTopk?{topk:lastTopk}:{}),layers:[]})});}
+        lastTopk=null;}});
+    await localGen(amsgs,{max_new_tokens:150,do_sample:false,
+      repetition_penalty:1.15,          // curb greedy loops (1.3+ → token soup)
+      streamer,...(lp?{logits_processor:lp}:{})});
+    return text;
+  }
+  const res=await fetch($('base').value+'/chat/completions',{method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({model,messages:amsgs,stream:true,max_tokens:220,
+      temperature:0,frequency_penalty:0.3,stop:['\nObservation:']})});
+  if(!res.ok)throw new Error('HTTP '+res.status+' '+await res.text());
+  const rd=res.body.getReader(),dec=new TextDecoder();let buf='',text='';
+  for(;;){const {done,value}=await rd.read();if(done)break;
+    buf+=dec.decode(value,{stream:true});
+    const lines=buf.split('\n');buf=lines.pop();
+    for(const line of lines){if(!line.startsWith('data: '))continue;
+      const data=line.slice(6);if(data==='[DONE]')continue;
+      const delta=JSON.parse(data).choices?.[0]?.delta?.content;
+      if(delta){text+=delta;el.textContent=text;log.scrollTop=log.scrollHeight;}}}
+  return text;
+}
+async function runAgentTurn(text){
+  busy=true;$('send').disabled=true;input.value='';input.style.height='auto';
+  msgs.push({role:'user',content:text});bubble('user',text);
+  const amsgs=[{role:'system',content:aSys()},{role:'user',content:text}];
+  const cap=AGENT.cap,t0=performance.now();let answer=null,guardFails=0;
+  setPill('TASK');astat('starting…');
+  try{
+    for(let step=1;step<=cap;step++){
+      setPill('THINK');astat(`step ${step}/${cap} · thinking…`);
+      const el=bubble('assistant','');el.classList.add('busy','agent');
+      const raw=await agentGen(amsgs,el);
+      el.classList.remove('busy');
+      const p=aParse(raw);setPill('ROUTE');
+      el.textContent='💭 '+(p.thought||p.raw||'(empty)');
+      if(p.kind==='answer'){setPill('ANSWER');bubble('assistant',p.answer);
+        answer=p.answer;break;}
+      if(p.kind==='act'){
+        setPill('ACT');guardFails=0;        // model can format → forgive prior misses
+        const known=A_TOOLS[p.name]&&AGENT.tools.includes(p.name);
+        let result;
+        try{result=known?String(A_TOOLS[p.name].run(aArgs(p.argsRaw)))
+                        :`error: no tool named "${p.name}"`;}
+        catch(e){result='error: '+(e.message||e);}
+        bubble('assistant',`🔧 ${p.name}(${p.argsRaw})`).classList.add('agent');
+        setPill('OBSERVE');
+        bubble('assistant','↳ '+result).classList.add('agent','obs');
+        amsgs.push({role:'assistant',
+          content:`Thought: ${p.thought||''}\nAction: ${p.name}(${p.argsRaw})`});
+        amsgs.push({role:'user',content:'Observation: '+result});
+        if(step>=cap){bubble('assistant',
+          '(step cap reached before an answer)').classList.add('agent');}
+        continue;
+      }
+      // none → guard (cap wasted retries; don't echo the garbage back — it
+      // amplifies the loop; nudge with a concrete, placeholder-free example)
+      const degen=aDegen(raw);guardFails++;setPill('THINK');
+      if(guardFails<=2&&step<cap){
+        bubble('assistant',degen
+          ?'⚠ repetition loop — a classic tiny-model failure. Nudging it back to the format.'
+          :'⚠ no valid Action or Answer — nudging the model back to the format.')
+          .classList.add('agent','obs');
+        amsgs.push({role:'assistant',
+          content:p.thought?'Thought: '+p.thought:'(no valid step)'});
+        amsgs.push({role:'user',content:'That was not in the required format. '+
+          'Reply with ONE short step only, for example:\n'+
+          `Thought: I will use the tool.\nAction: ${A_EX[AGENT.tools[0]]}\n`+
+          'or:\nThought: I have the result.\nAnswer: 42'});
+        continue;
+      }
+      bubble('assistant','■ stopped — this model could not follow the tool '+
+        'format. That is common for tiny models; the guided lab with a scripted '+
+        'demo is at /agent.').classList.add('agent');
+      break;
+    }
+    msgs.push({role:'assistant',content:answer||'(no final answer)'});
+    astat(`done · ${((performance.now()-t0)/1000).toFixed(1)}s`);
+  }catch(e){bubble('error','agent error: '+(e.message||e));msgs.pop();
+    astat('error');
+  }finally{setPill(agentMode?'TASK':null);busy=false;$('send').disabled=false;
+    if(!COARSE)input.focus();}
+}
+$('agentbtn').onclick=()=>{
+  agentMode=!agentMode;
+  $('agentbtn').classList.toggle('on',agentMode);
+  $('agentbar').hidden=!agentMode;
+  input.placeholder=agentMode
+    ?'give the agent a task · enter to run the tool-use loop'
+    :(COARSE||matchMedia('(max-width:760px)').matches
+       ?'message · enter sends':'message · enter to send, shift+enter for newline');
+  setPill(agentMode?'TASK':null);
+  draw();                                   // agent bar changed the header height
+};
+
 async function send(){
   const text=input.value.trim();
   if(!text||busy)return;
+  if(agentMode)return runAgentTurn(text);
   busy=true;$('send').disabled=true;
   input.value='';input.style.height='auto';
   msgs.push({role:'user',content:text});
@@ -1847,5 +2109,6 @@ $('clear').onclick=()=>{msgs=[];log.replaceChildren();
                         if(!COARSE)input.focus();};
 if(!COARSE)input.focus();
 </script>
+<script src="/nav.js" defer></script>
 </body>
 </html>

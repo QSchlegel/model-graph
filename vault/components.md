@@ -52,13 +52,39 @@ attention arcs over the token strip, availability-aware metric cycling,
 lens flip dots, run boundaries, drag/pinch/touch, `?` explainer (the
 in-app documentation — keep it truthful). Engine select: server api /
 browser models / observable (see [engines](engines.md)). Loading bar with
-race-safe model switching.
+race-safe model switching. An **agent-mode** toggle (header) wraps generation
+in the tool-use loop with a compact state-pill strip — see
+[agent-harness](agent-harness.md#two-surfaces).
+
+## agent-harness
+
+`web/agent.html` (served at `/agent`) + the chat's agent-mode toggle — a
+client-side **finite state machine** that drives a tiny model through a bounded
+ReAct tool-use loop (THINK → ROUTE → ACT → OBSERVE → ANSWER/GUARD/STOP),
+entirely in the browser. `/agent` is the guided education page: pick a micro
+model (WebGPU via transformers.js) → pick a task + tools → watch the
+state-machine graph, transcript, trace tape and per-state explainer, with a
+scripted-demo fallback for no-WebGPU/no-download. Local tools run in the page
+(real: calculator/convert/clock/random_int; sandbox-labelled: weather/lookup).
+Full design, states, tools and parsing: [agent-harness](agent-harness.md).
 
 ## dashboard
 
 `web/dashboard.html` — generic block-registry drill-down (run › layer ›
 block › part), mock presets, trace loading, ws live mode, deep-link
 bootstrap (`?ws=1&layer&block&t`) that auto-connects, unfolds, seeks.
+
+## nav
+
+`web/nav.js` — the **single source of truth for site navigation**, loaded via
+`<script src="/nav.js" defer>` on every page (served by api_server at `/nav.js`).
+Every header shows just the brand + one **☰ menu** button (kept uncluttered);
+the button — or ⌘K / `/` — opens a grouped, searchable, keyboard-driven command
+palette (Tools / Learn / Source, type-to-filter, ↑↓/↵) that marks the current
+page. On marketing headers the button replaces the old inline `<nav>` link list;
+on dense app headers (chat/dashboard) it drops into the control row. Edit the
+link groups in `nav.js`, not seven page headers. The dashboard's `nav#crumb`
+(in-app run/layer breadcrumb) is left untouched.
 
 ## harness
 
