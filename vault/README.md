@@ -22,6 +22,11 @@ The living map of the project. Maintenance contract: [AGENTS.md](../AGENTS.md).
 - [protocol](protocol.md) — the v1 ndjson/websocket protocol
 - [engines](engines.md) — engine capability matrix (server / browser /
   observable / VL)
+- [agent-harness](agent-harness.md) — the in-browser state machine that drives
+  tiny models through a tool-use loop (`/agent` + chat agent mode)
+- [agent-benchmark](agent-benchmark.md) — the agentic tool-use benchmark
+  (`agent_harness.py` + `bench.py` + `suites/agentic.json`) to fine-tune +
+  rank models on a weighted AGENTIC score
 - [research-tiny-models](research-tiny-models.md) — tiny-model landscape,
   long-context findings (mid-2026)
 - [roadmap](roadmap.md) — the reasoning program and open threads
@@ -39,7 +44,10 @@ background) and `web/dashboard.html` (block-level drill-down). Browser-side
 engines run curated models on WebGPU via transformers.js; the
 `export_observable.py` pipeline re-exports ONNX models with residual-stream
 outputs so even in-browser runs are inspectable. `harness.py` validates the
-capture pipeline; suites under `suites/` make behavior + internals testable.
+capture pipeline; suites under `suites/` make behavior + internals testable. A
+client-side **agent harness** (`web/agent.html` at `/agent`, plus an agent-mode
+toggle in the chat) drives curated browser models through a state-machine
+tool-use loop — [agent-harness](agent-harness.md).
 
 ## Ports & artifacts
 

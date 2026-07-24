@@ -65,6 +65,25 @@ sequenceDiagram
   A-->>Ag: content · finish_reason=stop
 ```
 
+## In-browser agent harness (ReAct state machine)
+
+Drives a tiny browser model through a bounded tool-use loop, client-side —
+`/agent` (guided + graph) and the chat's agent-mode toggle. Full states, tools
+and parsing: [agent-harness](agent-harness.md).
+
+```mermaid
+flowchart TD
+  T[task + selected tools] --> SP[system prompt<br/>ReAct format + tool list]
+  SP --> TH[THINK<br/>model generates one step]
+  TH --> R{ROUTE<br/>parse the text}
+  R -->|tool call| A[ACT<br/>run local JS tool]
+  R -->|final answer| AN([ANSWER, done])
+  R -->|neither| G[GUARD]
+  A --> O[OBSERVE<br/>append result] --> TH
+  G -->|retry with the format| TH
+  G -->|retries / step cap| ST([STOP])
+```
+
 ## Browser engines
 
 ```mermaid

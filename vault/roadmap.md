@@ -24,6 +24,18 @@ measurement + inspection harness. Model landscape:
   depth, attention sources/spread — all recorded per run.
 - First captured reasoning failure: "3+2−1 apples → 6" with attention mass
   on the `<|im_start|>` sink instead of the numbers.
+- In-browser **agent harness**: a state machine drives tiny models
+  (SmolLM2-135M/360M, Qwen2.5-0.5B on WebGPU) through a ReAct tool-use loop —
+  `/agent` (guided, with the state-machine graph) + a chat agent-mode toggle.
+  Makes tool-reasoning for micro models directly watchable and testable;
+  design: [agent-harness](agent-harness.md).
+- **Agentic benchmark**: `agent_harness.py` + `bench.py` + `suites/agentic.json`
+  (34 graded cases, 11 categories) score any OpenAI-compatible model on a
+  weighted AGENTIC score (0–100) — a paired before/after fine-tune gate and a
+  model leaderboard, with a whole-token anti-gaming matcher and a CI
+  registry-parity test (`test_agent.py`). Design + adversarial review:
+  [agent-benchmark](agent-benchmark.md). This supersedes "reasoning suite v1"
+  below for the tool-use axis.
 
 ## Next steps (ordered)
 

@@ -157,6 +157,7 @@
   <nav>
     <a href="/chat">chat</a>
     <a href="/dashboard">dashboard</a>
+    <a href="/agent">agent</a>
     <a class="hot" href="/intro">intro</a>
     <a href="/six-pager">six-pager</a>
     <a href="/blog/">blog</a>
@@ -170,8 +171,9 @@
   <p>Nine ideas, nine papers, one visual language. Everything below animates
      in the same rendering the live inspector uses on real models — mock
      data on this page, forward hooks in the app. Read top to bottom, then
-     open the <a href="/chat">chat</a> and watch every one of these ideas
-     happen on a real model, live.</p>
+     open the <a href="/chat">chat</a> to watch these ideas happen on a real
+     model, or <a href="/agent">run a tiny one as an agent</a> yourself, right
+     in your browser.</p>
 </div>
 
 <div class="paper">
@@ -357,9 +359,13 @@
     territory.</h1>
   <p>Every animation above is mock data in a real renderer. The app runs
      the same visual language on live forward passes — norms, heads,
-     router flow, lens, arcs, trajectories — for any HF causal LM.</p>
+     router flow, lens, arcs, trajectories — for any HF causal LM. And once
+     you've seen how a model predicts the next token, make it <b>act</b>:
+     drive a micro model through an agent loop and watch it decide, call a
+     tool, and observe — live in your browser.</p>
   <div class="cta">
-    <a class="btn primary" href="/chat">Open the chat →</a>
+    <a class="btn primary" href="/agent">Run a micro model as an agent →</a>
+    <a class="btn" href="/chat">Open the chat</a>
     <a class="btn" href="/dashboard">Dashboard</a>
     <a class="btn" href="/#inside">Step-by-step walkthrough</a>
   </div>
@@ -769,5 +775,6 @@ if(!REDUCED){
   window.addEventListener('resize',()=>SC.forEach(s=>{if(s.on)paint(s);}));
 }
 </script>
+<script src="/nav.js" defer></script>
 </body>
 </html>

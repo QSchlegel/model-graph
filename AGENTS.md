@@ -28,6 +28,10 @@ harness.
     LiquidAI/LFM2.5-1.2B-Instruct --device mps --tokens 24` (pipeline sanity)
   - `python curator.py suite suites/smoke.json` and `suites/tools.json`
     (behavioral + internals checks; exit code ≠ 0 = fail)
+  - agent harness / tools / benchmark changed → `python test_agent.py` (tool
+    golden values = JS↔Python registry parity, matcher, scoring; exit ≠ 0 =
+    fail). Full agentic benchmark: `python bench.py suites/agentic.json
+    --models lfm=http://localhost:8080#<model>` (needs a running api_server).
   - UI changes: verify in the browser pane (screenshot / read_page), not by
     assertion.
 
@@ -44,6 +48,14 @@ When you change...                     → update...
 - engines (chat.html engine select)     → `vault/engines.md` capability matrix
 - curator checks / suite schema         → `vault/components.md#curator`,
   suites/ examples
+- agent harness / tools / prompt         → keep `agent_harness.py` (Python) and
+  `web/agent.html` + `web/chat.html` (JS) in lockstep; `test_agent.py` golden
+  values gate the parity; update `vault/agent-harness.md`
+- benchmark suite / metrics / scoring    → `suites/agentic.json`, `bench.py`,
+  `vault/agent-benchmark.md` (keep the AGENTIC weights + gate thresholds true)
+- site navigation / menu links           → `web/nav.js` ONLY (shared command
+  menu, one source of truth, served at `/nav.js`; every page includes it) +
+  `vault/components.md#nav` — do not re-add per-page nav `<a>` lists
 - architecture (new component/port)     → `vault/architecture.md` graphs +
   `vault/README.md` index + `.claude/launch.json` if runnable
 - research findings / model choices     → `vault/research-tiny-models.md`,

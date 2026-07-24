@@ -22,7 +22,8 @@ transformers, hybrid conv/attention models (LFM2.5), Mamba-style SSMs, and MoE.
     server.py           hooked HF model → NDJSON protocol over ws://localhost:8765
     api_server.py       OpenAI-compatible /v1/chat/completions in front of the
                         hooked model; broadcasts internals to the dashboard ws
-                        and serves the web UIs over http (chat at /, /dashboard)
+                        and serves the web UIs over http (/, /chat, /dashboard,
+                        /agent, /intro, /six-pager, /blog)
     export_observable.py  build an *observable* ONNX model: graph-surgery every
                         layer's residual stream (already computed inside the
                         fused SkipLayerNorm nodes) into declared outputs
@@ -47,6 +48,20 @@ transformers, hybrid conv/attention models (LFM2.5), Mamba-style SSMs, and MoE.
     replay.py           stream a recorded .ndjson trace over the same websocket
     make_mock.py        generate realistic mock traces (v1 protocol)
     harness.py          test harness: validate model folder / capture / verify trace
+    agent_harness.py    the ReAct agent harness in Python (faithful port of
+                        web/agent.html): local tools, tolerant parser (ReAct +
+                        native tool_calls), bounded loop; drives any
+                        OpenAI-compatible model. run_agent(base,model,task,tools)
+    bench.py            agentic tool-use benchmark: run the harness over
+                        suites/agentic.json against one or more models, score a
+                        weighted AGENTIC (0-100), emit a leaderboard + report
+                        (reports/, gitignored). fine-tune before/after gate +
+                        model ranking. `python bench.py suites/agentic.json
+                        --models lfm=http://localhost:8080#LiquidAI/LFM2.5-1.2B-Instruct`
+    suites/agentic.json 34 graded agentic cases (11 categories); golds are exact
+                        tool outputs, locked by test_agent.py
+    test_agent.py       CI gate: tool golden values (JS↔Python registry parity),
+                        whole-token matcher, scoring logic. `python test_agent.py`
     web/dashboard.html  THE app — generic block-registry dashboard (mock presets,
                         trace loading, live ws, drill-down run›layer›block›part)
     web/chat.html       chat window on the OpenAI endpoint (SSE streaming,
@@ -60,6 +75,12 @@ transformers, hybrid conv/attention models (LFM2.5), Mamba-style SSMs, and MoE.
                         with arrow keys; heatmap dots mark lens flips (red =
                         settles on final token), empty click cycles metric,
                         drag pans, dashed request bounds
+    web/agent.html      /agent — in-browser agent state machine: a ReAct
+                        tool-use loop over a curated micro model on WebGPU,
+                        with a live state-machine graph, transcript, trace tape,
+                        per-state explainer and a scripted-demo fallback (no
+                        GPU / no download). chat.html has an agent-mode toggle
+                        running the same loop with the full internals viz.
     web/demo.html       earlier standalone in-chat demo (self-contained mock)
     web/graph.html      earlier minimal ws client (spine graph only)
     traces/             real LFM2.5-1.2B traces (verified) + mock traces

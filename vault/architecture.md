@@ -13,9 +13,10 @@ Component detail: [components](components.md) · wire format:
 ```mermaid
 flowchart LR
   subgraph clients["Clients"]
-    CHAT["web/chat.html<br/>chat + background viz"]
+    CHAT["web/chat.html<br/>chat + background viz<br/>+ agent mode"]
     DASH["web/dashboard.html<br/>block drill-down"]
-    SDK["OpenAI SDKs / agents<br/>(tool calling)"]
+    AGENT["web/agent.html · /agent<br/>agent state machine<br/>+ local JS tools"]
+    SDK["OpenAI SDKs / agents<br/>(native tool calling)"]
     CLI["curator.py CLI<br/>run/test/suite"]
   end
 
@@ -50,7 +51,16 @@ flowchart LR
   STATIC -->|observable model| TJS
   HF -->|stock models| TJS
   TJS -->|local frames| CHAT
+  TJS -->|per-step frames| AGENT
+  AGENT -->|generate step| TJS
+  AGENT -.->|server-engine loop| OAI
 ```
+
+> [!note] The agent harness is client-side
+> `web/agent.html` and the chat's agent mode run a ReAct tool-use **state
+> machine** in the browser — local JS tools, no server round-trip (except the
+> optional server-engine loop, dashed above). It reuses the same transformers.js
+> loader and `onProto` viz funnel — see [agent-harness](agent-harness.md).
 
 ## Data flow (one server-engine token)
 

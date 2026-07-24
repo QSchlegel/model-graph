@@ -1,0 +1,175 @@
+{
+  "name": "agentic",
+  "description": "Agentic tool-use benchmark for the micro-agent harness. Each case is one full harness trajectory (think -> act -> observe -> answer). Graded by bench.py with a normalized, whole-token numeric matcher. Golds are the EXACT tool outputs (verify with: python bench.py --verify-golds suites/agentic.json). Distractor tool-sets, grounding-by-tool-result, precedence traps and abstain markers per the adversarial design review.",
+  "cases": [
+    {"id": "arith-basic", "category": "single-tool-arithmetic", "difficulty": "easy",
+     "task": "What is 47 * 19 + 100?", "tools": ["calculator", "weather", "lookup"],
+     "expect": {"answer_contains": ["993"], "should_call": ["calculator"], "should_not_call": ["weather", "lookup"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Baseline routing with distractor tools; must pick calculator, echo the exact result."},
+
+    {"id": "arith-precedence-trap", "category": "hallucination-correction", "difficulty": "medium",
+     "task": "Compute 3847 + 9682 * 2.", "tools": ["calculator", "convert"],
+     "expect": {"answer_contains": ["23211"], "answer_not_contains": ["27058"], "should_call": ["calculator"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "trap_wrong": "27058", "optimal_steps": 2},
+     "rationale": "Precedence trap: left-to-right guess = 27058; only the tool gives 23211. Rewards grounding in the real result."},
+
+    {"id": "arith-big-mult", "category": "hallucination-correction", "difficulty": "medium",
+     "task": "What is 4567 multiplied by 6183?", "tools": ["calculator"],
+     "expect": {"answer_contains": ["28237761"], "should_call": ["calculator"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "trap_wrong": "0", "optimal_steps": 2},
+     "rationale": "A product no small model computes in its head; final answer must match the tool."},
+
+    {"id": "arith-substring-trap", "category": "single-tool-arithmetic", "difficulty": "medium",
+     "task": "What is 1000 divided by 10?", "tools": ["calculator"],
+     "expect": {"answer_contains": ["100"], "answer_not_contains": ["1000"], "should_call": ["calculator"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Substring-matcher regression: gold 100 with 1000 present in the prompt; forces whole-token numeric matching."},
+
+    {"id": "conv-temp-c2f", "category": "unit-conversion", "difficulty": "easy",
+     "task": "Convert 100 degrees Celsius to Fahrenheit.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["212"], "should_call": ["convert"], "should_not_call": ["calculator"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Temperature conversion; correct enum direction c->f; 100C=212F."},
+
+    {"id": "conv-temp-f2c", "category": "unit-conversion", "difficulty": "easy",
+     "task": "What is 212 Fahrenheit in Celsius?", "tools": ["convert"],
+     "expect": {"answer_contains": ["100"], "should_call": ["convert"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Reverse temperature direction; guards against swapped from/to."},
+
+    {"id": "conv-len-km2mi", "category": "unit-conversion", "difficulty": "easy",
+     "task": "How many miles is 10 kilometers?", "tools": ["convert", "weather"],
+     "expect": {"answer_contains": ["6.2137"], "should_call": ["convert"], "should_not_call": ["weather"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Length conversion; exact 4-decimal tool formatting, not a rounded guess."},
+
+    {"id": "conv-mass-kg2g", "category": "unit-conversion", "difficulty": "easy",
+     "task": "Convert 2 kilograms to grams.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["2000"], "should_call": ["convert"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Mass dimension; dimension-correct enum selection."},
+
+    {"id": "conv-synonym-words", "category": "argument-extraction", "difficulty": "medium",
+     "task": "A thermometer reads 98.6 degrees fahrenheit. What is that in celsius?", "tools": ["convert"],
+     "expect": {"answer_contains": ["37"], "should_call": ["convert"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Spelled-out unit words (fahrenheit/celsius) must map to enums; 98.6F=37C."},
+
+    {"id": "arg-units-mi2km", "category": "argument-extraction", "difficulty": "medium",
+     "task": "I ran 5 miles this morning. How many kilometers is that?", "tools": ["convert", "clock"],
+     "expect": {"answer_contains": ["8.0467"], "should_call": ["convert"], "should_not_call": ["clock"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Extract value + infer from=mi/to=km from prose; exact formatting."},
+
+    {"id": "arg-words-kg2lb", "category": "argument-extraction", "difficulty": "hard",
+     "task": "Convert one and a half kilograms to pounds.", "tools": ["convert"],
+     "expect": {"answer_contains": ["3.3069"], "should_call": ["convert"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Spelled-out number 'one and a half' -> 1.5 argument."},
+
+    {"id": "conv-comma-everest-ft", "category": "argument-extraction", "difficulty": "hard",
+     "task": "Mount Everest is 8,849 metres tall. Convert that height to feet.", "tools": ["convert"],
+     "expect": {"answer_contains": ["29032.1522"], "should_call": ["convert"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Comma-normalization isolate: 8,849 -> 8849 before convert; scored explicitly."},
+
+    {"id": "chain-convert-mult", "category": "multi-step-chain", "difficulty": "medium",
+     "task": "Convert 10 km to miles, then multiply that result by 3.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["18.6411"], "should_call": ["convert", "calculator"], "min_tool_calls": 2, "max_steps": 6, "grounded": true, "optimal_steps": 3},
+     "rationale": "Two dependent calls: convert output (6.2137) feeds the calculator; 6.2137*3=18.6411."},
+
+    {"id": "chain-mi-ft-add", "category": "multi-step-chain", "difficulty": "medium",
+     "task": "Convert 1 mile to feet, then add 220 feet to it.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["5500"], "should_call": ["convert", "calculator"], "min_tool_calls": 2, "max_steps": 6, "grounded": true, "optimal_steps": 3},
+     "rationale": "1 mi=5280 ft then 5280+220=5500; dependency on the converted value."},
+
+    {"id": "chain-c2f-sub", "category": "multi-step-chain", "difficulty": "medium",
+     "task": "Convert 100 Celsius to Fahrenheit, then subtract 12 from the result.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["200"], "should_call": ["convert", "calculator"], "min_tool_calls": 2, "max_steps": 6, "grounded": true, "optimal_steps": 3},
+     "rationale": "212-12=200; temperature conversion into an arithmetic follow-up."},
+
+    {"id": "chain-lookup-convert-everest-cm", "category": "multi-step-chain", "difficulty": "hard",
+     "task": "Look up how tall Mount Everest is, then convert that height to centimeters.", "tools": ["lookup", "convert"],
+     "expect": {"answer_contains": ["884900"], "should_call": ["lookup", "convert"], "min_tool_calls": 2, "max_steps": 6, "grounded": true, "optimal_steps": 3},
+     "rationale": "Grounded 2-tool chain: lookup -> 8,849 m parsed and fed to convert -> 884900 cm."},
+
+    {"id": "chain-kg-g-batches", "category": "multi-step-chain", "difficulty": "medium",
+     "task": "A recipe uses 2 kg of flour per batch. Convert that to grams, then compute the total for 3 batches.", "tools": ["convert", "calculator"],
+     "expect": {"answer_contains": ["6000"], "should_call": ["convert", "calculator"], "min_tool_calls": 2, "max_steps": 6, "grounded": true, "optimal_steps": 3},
+     "rationale": "convert 2kg=2000g then 2000*3=6000; realistic dependent chain."},
+
+    {"id": "select-math-distractors", "category": "tool-selection-distractor", "difficulty": "medium",
+     "task": "What is 256 * 256?", "tools": ["calculator", "weather", "lookup", "clock", "random_int"],
+     "expect": {"answer_contains": ["65536"], "should_call": ["calculator"], "should_not_call": ["weather", "lookup", "clock", "random_int"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Five tools offered; must route a math question to calculator and avoid all distractors."},
+
+    {"id": "select-weather-distractors", "category": "tool-selection-distractor", "difficulty": "medium",
+     "task": "What's the weather in Tokyo right now?", "tools": ["weather", "calculator", "convert", "lookup"],
+     "expect": {"answer_contains": ["26"], "should_call": ["weather"], "should_not_call": ["calculator", "convert", "lookup"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Route a weather question past math/lookup distractors; grounded on the sandbox value (26C, humid)."},
+
+    {"id": "select-lookup-distractors", "category": "tool-selection-distractor", "difficulty": "medium",
+     "task": "What is the speed of light?", "tools": ["lookup", "calculator", "convert", "weather"],
+     "expect": {"answer_contains": ["299,792,458"], "should_call": ["lookup"], "should_not_call": ["calculator", "convert", "weather"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Fact question -> lookup; grounded on the exact KB string (not the model's memory)."},
+
+    {"id": "ground-weather-paris", "category": "grounding", "difficulty": "easy",
+     "task": "Is it raining in London? Use the weather tool.", "tools": ["weather"],
+     "expect": {"answer_contains": ["rain"], "should_call": ["weather"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Grounding on a tool-returned string ('light rain') that is NOT in the prompt."},
+
+    {"id": "ground-lookup-python", "category": "grounding", "difficulty": "medium",
+     "task": "In what year was Python released? Use the lookup tool for 'python'.", "tools": ["lookup"],
+     "expect": {"answer_contains": ["1991"], "should_call": ["lookup"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Answer value (1991) comes only from the tool result, not the prompt."},
+
+    {"id": "ground-weather-berlin", "category": "grounding", "difficulty": "medium",
+     "task": "I'm packing for Berlin. What are the current conditions there?", "tools": ["weather", "lookup"],
+     "expect": {"answer_contains": ["overcast"], "should_call": ["weather"], "should_not_call": ["lookup"], "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Grounding: 'overcast' appears only in the tool result; distractor lookup present."},
+
+    {"id": "abstain-capital", "category": "abstain", "difficulty": "hard",
+     "task": "What is the capital of Italy?", "tools": ["weather", "calculator"],
+     "expect": {"answer_contains": ["Rome"], "decline_markers": ["can't", "cannot", "no tool", "not able", "don't have"], "should_not_call": ["weather", "calculator"], "abstain": true, "max_steps": 3, "optimal_steps": 1},
+     "rationale": "No offered tool answers this; model must NOT call weather/calculator and either say Rome or decline honestly."},
+
+    {"id": "abstain-fact", "category": "abstain", "difficulty": "hard",
+     "task": "Who wrote the play Hamlet?", "tools": ["calculator", "convert"],
+     "expect": {"answer_contains": ["Shakespeare"], "decline_markers": ["can't", "cannot", "no tool", "not able", "don't have"], "should_not_call": ["calculator", "convert"], "abstain": true, "max_steps": 3, "optimal_steps": 1},
+     "rationale": "Only math/convert offered; abstain or answer parametrically, never call an unrelated tool."},
+
+    {"id": "abstain-weather-nodata", "category": "abstain", "difficulty": "hard",
+     "task": "What is the airspeed of an unladen swallow?", "tools": ["calculator", "weather", "convert"],
+     "expect": {"decline_markers": ["can't", "cannot", "no tool", "not able", "don't have", "don't know", "not sure"], "should_not_call": ["calculator", "weather", "convert"], "abstain": true, "max_steps": 3, "optimal_steps": 1},
+     "rationale": "Genuinely unanswerable by any tool; the only correct move is to decline (no gold fact)."},
+
+    {"id": "norefuse-answerable-math", "category": "robustness-negative", "difficulty": "medium",
+     "task": "What is 88 + 12?", "tools": ["calculator", "weather"],
+     "expect": {"answer_contains": ["100"], "should_call": ["calculator"], "should_not_call": ["weather"], "abstain": false, "min_tool_calls": 1, "max_steps": 3, "grounded": true, "optimal_steps": 2},
+     "rationale": "Over-refusal guard paired with the abstain cases: this IS answerable; abstaining here is WRONG."},
+
+    {"id": "err-weather-unknown-city", "category": "error-recovery", "difficulty": "hard",
+     "task": "What's the weather on the Moon?", "tools": ["weather"],
+     "expect": {"decline_markers": ["no", "cannot", "can't", "not", "don't"], "should_call": ["weather"], "max_steps": 4, "optimal_steps": 2},
+     "rationale": "weather('moon') -> 'no demo data'; model must read the error and honestly report it can't, not fabricate."},
+
+    {"id": "err-incompatible-convert", "category": "error-recovery", "difficulty": "hard",
+     "task": "Convert 5 kilometers to kilograms.", "tools": ["convert"],
+     "expect": {"decline_markers": ["can't", "cannot", "not", "no", "impossible", "incompatible", "different"], "should_call": ["convert"], "max_steps": 4, "optimal_steps": 2},
+     "rationale": "convert(km,kg) errors (different dimensions); model must recognize the impossibility, not invent a number."},
+
+    {"id": "err-arg-type", "category": "error-recovery", "difficulty": "hard",
+     "task": "Use the calculator to work out 'the sum of my three apples'.", "tools": ["calculator"],
+     "expect": {"decline_markers": ["can't", "cannot", "not", "no", "arithmetic", "number", "clarify"], "should_call": ["calculator"], "max_steps": 4, "optimal_steps": 2},
+     "rationale": "calculator on non-arithmetic -> error 'only arithmetic'; model must recover/ask, not loop or fabricate."},
+
+    {"id": "did-call-clock", "category": "nondeterministic-did-call", "difficulty": "easy",
+     "task": "What is the current date and time?", "tools": ["clock"],
+     "expect": {"should_call": ["clock"], "min_tool_calls": 1, "max_steps": 3, "grade_did_call_only": true, "optimal_steps": 2},
+     "rationale": "clock() value is non-deterministic; graded only on invoking the right tool, never on an exact value."},
+
+    {"id": "did-call-random", "category": "nondeterministic-did-call", "difficulty": "easy",
+     "task": "Roll a six-sided die for me.", "tools": ["random_int", "calculator"],
+     "expect": {"should_call": ["random_int"], "should_not_call": ["calculator"], "min_tool_calls": 1, "max_steps": 3, "grade_did_call_only": true, "optimal_steps": 2},
+     "rationale": "random_int is seeded but graded did-call; must pick random_int over calculator, args min=1/max=6."},
+
+    {"id": "neg-empty-ish", "category": "robustness-negative", "difficulty": "medium",
+     "task": "Thanks, that's all I needed.", "tools": ["calculator", "weather"],
+     "expect": {"should_not_call": ["calculator", "weather"], "abstain": true, "max_steps": 2, "optimal_steps": 1},
+     "rationale": "No task at all; a disciplined agent fires NO tool and just acknowledges."},
+
+    {"id": "neg-already-answered", "category": "robustness-negative", "difficulty": "medium",
+     "task": "The meeting is at 3pm. Just confirm you understand.", "tools": ["clock", "calculator"],
+     "expect": {"should_not_call": ["clock", "calculator"], "abstain": true, "max_steps": 2, "optimal_steps": 1},
+     "rationale": "No computation or lookup needed; must not fire a spurious clock/calculator call."}
+  ]
+}
